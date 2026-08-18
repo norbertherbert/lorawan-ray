@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="A small Vite and JavaScript example using SurrealDB Cloud"
+      content="A private task list using Google Sign-In and SurrealDB Cloud"
     />
     <title>SurrealDB Cloud · Tiny Tasks</title>
   </head>
@@ -15,7 +15,7 @@
         <div>
           <p class="eyebrow">SurrealDB Cloud example</p>
           <h1>Tiny Tasks</h1>
-          <p class="lede">A minimal browser app backed directly by your cloud database.</p>
+          <p class="lede">A private task list backed directly by your cloud database.</p>
         </div>
         <div class="session-actions">
           <div class="status" id="status" data-state="offline">
@@ -35,49 +35,13 @@
           <span class="number">01</span>
         </div>
 
-        <form id="connect-form" class="connect-form">
-          <div class="connection-fields">
-            <div class="field host-field">
-              <label for="host">Host</label>
-              <input id="host" name="host" type="text" autocomplete="url" required />
-            </div>
-            <div class="field">
-              <label for="namespace">Namespace</label>
-              <input id="namespace" name="namespace" type="text" required />
-            </div>
-            <div class="field">
-              <label for="database">Database</label>
-              <input id="database" name="database" type="text" required />
-            </div>
-            <div class="field host-field">
-              <label for="username">Username</label>
-              <input id="username" name="username" type="text" autocomplete="username" required />
-            </div>
-          </div>
-
-          <label for="auth-level">Authentication scope</label>
-          <select id="auth-level" name="auth-level">
-            <option value="root">Root user</option>
-            <option value="namespace">Namespace user (main)</option>
-            <option value="database" selected>Database user (main/main)</option>
-          </select>
-          <label for="password">Database password</label>
-          <div class="input-row">
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autocomplete="current-password"
-              placeholder="Enter the password for nano-things-user"
-              required
-            />
-            <button type="submit" id="connect-button">Connect</button>
-          </div>
+        <div class="google-signin">
+          <div id="google-button" aria-label="Sign in with Google"></div>
           <p class="hint">
-            Use the password defined for this system user in Surrealist’s Authentication panel,
-            not your SurrealDB Cloud account password. It is kept in memory only.
+            Google verifies your identity. A short-lived token grants access only to your own
+            tasks; no database password is sent to this page.
           </p>
-        </form>
+        </div>
       </section>
 
       <section class="card tasks-card" id="tasks-card" hidden>

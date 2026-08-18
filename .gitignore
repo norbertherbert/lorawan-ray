@@ -3,4 +3,6 @@ dist/
 .env
 .env.local
 *.local
-
+.dev.vars
+worker/.dev.vars
+client_secret.json

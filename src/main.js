@@ -1,4 +1,4 @@
-import { NotAllowedError, RecordId, Surreal, Table } from 'surrealdb';
+import { RecordId, Surreal, Table } from 'surrealdb';
 import './style.css';
 
 const config = {
@@ -7,22 +7,16 @@ const config = {
     'wss://nano-things-fre-06fekk904lvvv6p0ocvu8dm7c4.aws-euw1.surreal.cloud',
   namespace: import.meta.env.VITE_SURREAL_NAMESPACE || 'main',
   database: import.meta.env.VITE_SURREAL_DATABASE || 'main',
-  username: import.meta.env.VITE_SURREAL_USERNAME || 'nano-things-user',
+  googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
+  authBrokerUrl: (import.meta.env.VITE_AUTH_BROKER_URL || '').replace(/\/$/, ''),
 };
 
 const db = new Surreal();
 const todos = new Table('todo');
 
 const elements = {
-  connectForm: document.querySelector('#connect-form'),
-  connectButton: document.querySelector('#connect-button'),
   connectionCard: document.querySelector('#connection-card'),
-  host: document.querySelector('#host'),
-  namespace: document.querySelector('#namespace'),
-  database: document.querySelector('#database'),
-  username: document.querySelector('#username'),
-  authLevel: document.querySelector('#auth-level'),
-  password: document.querySelector('#password'),
+  googleButton: document.querySelector('#google-button'),
   tasksCard: document.querySelector('#tasks-card'),
   taskForm: document.querySelector('#task-form'),
   taskInput: document.querySelector('#new-task'),
@@ -37,10 +31,8 @@ const elements = {
 };
 
 let tasks = [];
+let signedInUser = null;
 
-populateConnectionFields();
-
-elements.connectForm.addEventListener('submit', connect);
 elements.logoutButton.addEventListener('click', logout);
 elements.taskForm.addEventListener('submit', createTask);
 elements.refreshButton.addEventListener('click', loadTasks);
@@ -50,66 +42,109 @@ window.addEventListener('pagehide', () => {
   void db.close().catch(() => {});
 });
 
-/** Fills the editable connection form with the configured default values. */
-function populateConnectionFields() {
-  elements.host.value = new URL(config.endpoint).host;
-  elements.namespace.value = config.namespace;
-  elements.database.value = config.database;
-  elements.username.value = config.username;
-}
+void initializeSignIn();
 
-/**
- * Opens an authenticated SurrealDB connection using the values from the form.
- * On success, it replaces the login card with the task list.
- * @param {SubmitEvent} event The connection form submission event.
- */
-async function connect(event) {
-  event.preventDefault();
-  clearError();
-  setStatus('connecting', 'Connecting…');
-  setBusy(elements.connectButton, true, 'Connecting…');
+/** Loads Google Identity Services and renders its official sign-in button. */
+async function initializeSignIn() {
+  const missing = [
+    !config.googleClientId && 'VITE_GOOGLE_CLIENT_ID',
+    !config.authBrokerUrl && 'VITE_AUTH_BROKER_URL',
+  ].filter(Boolean);
+
+  if (missing.length) {
+    setStatus('offline', 'Setup required');
+    showMessage(
+      `Missing ${missing.join(' and ')}. Copy .env.example to .env.local and add the deployment values.`,
+    );
+    return;
+  }
 
   try {
-    updateConfigFromForm();
-    await db.connect(config.endpoint, {
-      namespace: config.namespace,
-      database: config.database,
-      authentication: authenticationFor(
-        elements.authLevel.value,
-        elements.password.value,
-      ),
+    await loadGoogleIdentityScript();
+    window.google.accounts.id.initialize({
+      client_id: config.googleClientId,
+      callback: authenticateWithGoogle,
+      cancel_on_tap_outside: true,
     });
-
-    elements.password.value = '';
-    elements.connectionCard.hidden = true;
-    elements.logoutButton.hidden = false;
-    elements.tasksCard.hidden = false;
-    setStatus('online', 'Connected');
-    await loadTasks();
-    elements.taskInput.focus();
+    window.google.accounts.id.renderButton(elements.googleButton, {
+      type: 'standard',
+      theme: 'outline',
+      size: 'large',
+      shape: 'rectangular',
+      text: 'continue_with',
+      width: Math.min(360, elements.googleButton.clientWidth || 360),
+    });
+    setStatus('offline', 'Signed out');
   } catch (error) {
-    setStatus('offline', 'Connection failed');
-    if (error instanceof NotAllowedError) {
-      showAuthenticationError();
-    } else {
-      showError(error, 'Could not connect. Check the Cloud instance details.');
-    }
-    await db.close().catch(() => {});
-  } finally {
-    setBusy(elements.connectButton, false, 'Connect');
+    showError(error, 'Google Sign-In could not be loaded.');
   }
 }
 
-/** Reads the connection form and updates the configuration used by the SDK. */
-function updateConfigFromForm() {
-  const host = elements.host.value.trim();
-  config.endpoint = /^wss?:\/\//i.test(host) ? host : `wss://${host}`;
-  config.namespace = elements.namespace.value.trim();
-  config.database = elements.database.value.trim();
-  config.username = elements.username.value.trim();
+/** Resolves after the Google Identity Services browser library is available. */
+function loadGoogleIdentityScript() {
+  if (window.google?.accounts?.id) return Promise.resolve();
+
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-google-identity]');
+    const script = existing || document.createElement('script');
+
+    script.addEventListener('load', resolve, { once: true });
+    script.addEventListener('error', () => reject(new Error('Could not load accounts.google.com.')), {
+      once: true,
+    });
+
+    if (!existing) {
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.dataset.googleIdentity = 'true';
+      document.head.append(script);
+    }
+  });
 }
 
-/** Invalidates the current session, closes the connection, and restores the login screen. */
+/** Exchanges a verified Google credential for a narrowly scoped SurrealDB record token. */
+async function authenticateWithGoogle({ credential }) {
+  clearError();
+  setStatus('connecting', 'Signing in…');
+  elements.googleButton.classList.add('is-busy');
+
+  try {
+    const response = await fetch(`${config.authBrokerUrl}/auth/google`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential }),
+      credentials: 'omit',
+    });
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok || typeof result.token !== 'string') {
+      throw new Error(result.error || 'The authentication broker rejected this sign-in.');
+    }
+
+    await db.connect(config.endpoint, {
+      namespace: config.namespace,
+      database: config.database,
+      reconnect: true,
+    });
+    await db.authenticate(result.token);
+
+    signedInUser = result.user || null;
+    elements.connectionCard.hidden = true;
+    elements.logoutButton.hidden = false;
+    elements.tasksCard.hidden = false;
+    setStatus('online', signedInUser?.name ? `Signed in · ${signedInUser.name}` : 'Signed in');
+    await loadTasks();
+    elements.taskInput.focus();
+  } catch (error) {
+    setStatus('offline', 'Sign-in failed');
+    showError(error, 'Could not sign in.');
+    await db.close().catch(() => {});
+  } finally {
+    elements.googleButton.classList.remove('is-busy');
+  }
+}
+
+/** Invalidates the database session and restores the Google sign-in screen. */
 async function logout() {
   clearError();
   setBusy(elements.logoutButton, true, 'Logging out…');
@@ -120,47 +155,24 @@ async function logout() {
   } catch (error) {
     showError(error, 'The connection could not be closed cleanly.');
   } finally {
+    window.google?.accounts?.id?.disableAutoSelect();
+    signedInUser = null;
     tasks = [];
     renderTasks();
     elements.tasksCard.hidden = true;
     elements.connectionCard.hidden = false;
     elements.logoutButton.hidden = true;
     setBusy(elements.logoutButton, false, 'Logout');
-    setStatus('offline', 'Not connected');
-    elements.password.focus();
+    setStatus('offline', 'Signed out');
   }
 }
 
-/**
- * Builds the credential object required for the selected SurrealDB user scope.
- * @param {'root' | 'namespace' | 'database'} level Where the system user is defined.
- * @param {string} password The password entered by the user.
- * @returns {object} Credentials suitable for the SDK's authentication option.
- */
-function authenticationFor(level, password) {
-  const credentials = {
-    username: config.username,
-    password,
-  };
-
-  if (level === 'namespace' || level === 'database') {
-    credentials.namespace = config.namespace;
-  }
-
-  if (level === 'database') {
-    credentials.database = config.database;
-  }
-
-  return credentials;
-}
-
-/** Fetches all todo records from SurrealDB and refreshes the task list. */
+/** Fetches the current user's todo records and refreshes the task list. */
 async function loadTasks() {
   clearError();
   setBusy(elements.refreshButton, true, 'Refreshing…');
 
   try {
-    // A raw query is useful when you need SurrealQL features such as ORDER BY.
     [tasks] = await db.query('SELECT * FROM todo ORDER BY created_at DESC');
     renderTasks();
   } catch (error) {
@@ -170,10 +182,7 @@ async function loadTasks() {
   }
 }
 
-/**
- * Creates a todo record from the new-task form and reloads the list.
- * @param {SubmitEvent} event The new-task form submission event.
- */
+/** Creates a todo owned by the authenticated record user. */
 async function createTask(event) {
   event.preventDefault();
   clearError();
@@ -185,11 +194,8 @@ async function createTask(event) {
   setBusy(button, true, 'Adding…');
 
   try {
-    await db.create(todos).content({
-      title,
-      done: false,
-      created_at: new Date().toISOString(),
-    });
+    // The schema assigns owner=$auth and created_at=time::now(); the browser cannot override them.
+    await db.create(todos).content({ title, done: false });
     elements.taskForm.reset();
     await loadTasks();
     elements.taskInput.focus();
@@ -200,10 +206,7 @@ async function createTask(event) {
   }
 }
 
-/**
- * Updates a todo's completed state when its checkbox changes.
- * @param {Event} event The bubbling change event from the task list.
- */
+/** Updates a todo's completed state when its checkbox changes. */
 async function toggleTask(event) {
   if (!event.target.matches('input[type="checkbox"]')) return;
 
@@ -223,10 +226,7 @@ async function toggleTask(event) {
   }
 }
 
-/**
- * Deletes the todo associated with a clicked Delete button.
- * @param {MouseEvent} event The bubbling click event from the task list.
- */
+/** Deletes the todo associated with a clicked Delete button. */
 async function deleteTask(event) {
   const button = event.target.closest('[data-action="delete"]');
   if (!button) return;
@@ -238,7 +238,6 @@ async function deleteTask(event) {
   clearError();
 
   try {
-    // `task.id` is already a RecordId. The fallback shows how to construct one.
     const id = task.id instanceof RecordId ? task.id : new RecordId('todo', task.id);
     await db.delete(id);
     await loadTasks();
@@ -258,11 +257,7 @@ function renderTasks() {
   elements.taskCount.textContent = `${tasks.length} ${noun} · ${openCount} open`;
 }
 
-/**
- * Creates the list-item DOM elements for one todo record.
- * @param {object} task A todo record returned by SurrealDB.
- * @returns {HTMLLIElement} The rendered task list item.
- */
+/** Creates the list-item DOM elements for one todo record. */
 function taskItem(task) {
   const item = document.createElement('li');
   item.className = 'task-item';
@@ -290,38 +285,26 @@ function taskItem(task) {
   return item;
 }
 
-/** Updates the connection-status text and its visual state. */
 function setStatus(state, text) {
   elements.status.dataset.state = state;
   elements.statusText.textContent = text;
 }
 
-/** Disables or enables a button and updates its label during an async operation. */
 function setBusy(element, busy, label) {
   element.disabled = busy;
   element.textContent = label;
 }
 
-/** Logs an unexpected error and displays a readable message in the page. */
 function showError(error, fallback) {
   console.error(error);
-  elements.error.textContent = error instanceof Error ? `${fallback} ${error.message}` : fallback;
+  showMessage(error instanceof Error ? `${fallback} ${error.message}` : fallback);
+}
+
+function showMessage(message) {
+  elements.error.textContent = message;
   elements.error.hidden = false;
 }
 
-/** Displays authentication guidance tailored to the currently selected user scope. */
-function showAuthenticationError() {
-  const scope =
-    elements.authLevel.value === 'database'
-      ? `database user in ${config.namespace}/${config.database}`
-      : `${elements.authLevel.value} user`;
-
-  elements.error.textContent =
-    `Authentication as a ${scope} was rejected. Verify that the user is defined at that exact scope and use its system-user password from Surrealist → Authentication.`;
-  elements.error.hidden = false;
-}
-
-/** Hides and clears the current page-level error message. */
 function clearError() {
   elements.error.hidden = true;
   elements.error.textContent = '';

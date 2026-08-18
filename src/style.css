@@ -30,8 +30,7 @@ body {
 }
 
 button,
-input,
-select {
+input {
   font: inherit;
 }
 
@@ -171,17 +170,6 @@ h2 {
   font-size: 0.75rem;
 }
 
-.connection-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-  margin: 0 0 30px;
-}
-
-.host-field {
-  grid-column: 1 / -1;
-}
-
 label {
   display: block;
   margin-bottom: 8px;
@@ -189,14 +177,12 @@ label {
   font-weight: 700;
 }
 
-.input-row,
 .task-form {
   display: flex;
   gap: 10px;
 }
 
-input:not([type='checkbox']),
-select {
+input:not([type='checkbox']) {
   width: 100%;
   min-width: 0;
   padding: 14px 15px;
@@ -206,17 +192,11 @@ select {
   background: #fff;
 }
 
-select {
-  margin-bottom: 18px;
-}
-
-input:not([type='checkbox']):focus,
-select:focus {
+input:not([type='checkbox']):focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(255, 79, 0, 0.13);
 }
 
-.input-row button,
 .task-form button {
   flex: 0 0 auto;
   padding: 0 23px;
@@ -227,7 +207,6 @@ select:focus {
   font-weight: 700;
 }
 
-.input-row button:hover,
 .task-form button:hover {
   background: var(--accent);
 }
@@ -236,6 +215,23 @@ select:focus {
   margin: 10px 0 0;
   color: var(--muted);
   font-size: 0.75rem;
+}
+
+.google-signin {
+  display: grid;
+  justify-items: start;
+  gap: 14px;
+}
+
+#google-button {
+  width: min(100%, 360px);
+  min-height: 44px;
+  transition: opacity 150ms ease;
+}
+
+#google-button.is-busy {
+  pointer-events: none;
+  opacity: 0.55;
 }
 
 .tasks-card {
@@ -358,22 +354,12 @@ select:focus {
     flex-direction: column;
   }
 
-  .input-row,
   .task-form {
     flex-direction: column;
   }
 
-  .input-row button,
   .task-form button {
     min-height: 48px;
-  }
-
-  .connection-fields {
-    grid-template-columns: 1fr;
-  }
-
-  .host-field {
-    grid-column: auto;
   }
 
   .delete-button {
