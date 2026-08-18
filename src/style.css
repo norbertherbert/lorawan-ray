@@ -30,7 +30,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -142,6 +143,11 @@ h1 {
   animation: pulse 1s infinite alternate;
 }
 
+.status[data-state='pending'] .status-dot {
+  background: #e2a80a;
+  box-shadow: 0 0 0 4px rgba(226, 168, 10, 0.14);
+}
+
 .card {
   margin-bottom: 18px;
   padding: clamp(24px, 5vw, 42px);
@@ -182,7 +188,8 @@ label {
   gap: 10px;
 }
 
-input:not([type='checkbox']) {
+input:not([type='checkbox']),
+select {
   width: 100%;
   min-width: 0;
   padding: 14px 15px;
@@ -192,7 +199,8 @@ input:not([type='checkbox']) {
   background: #fff;
 }
 
-input:not([type='checkbox']):focus {
+input:not([type='checkbox']):focus,
+select:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(255, 79, 0, 0.13);
 }
@@ -223,6 +231,15 @@ input:not([type='checkbox']):focus {
   gap: 14px;
 }
 
+.invitation-notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--green);
+  color: #1f6343;
+  background: #e7f3eb;
+  font-size: 0.8rem;
+}
+
 #google-button {
   width: min(100%, 360px);
   min-height: 44px;
@@ -236,6 +253,34 @@ input:not([type='checkbox']):focus {
 
 .tasks-card {
   margin-top: 28px;
+}
+
+.pending-card,
+.admin-card {
+  margin-top: 28px;
+}
+
+.pending-copy {
+  max-width: 650px;
+  margin: 0 0 24px;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.secondary-button {
+  min-height: 38px;
+  padding: 8px 13px;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  color: var(--ink);
+  background: var(--paper);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.secondary-button:hover {
+  color: var(--paper);
+  background: var(--ink);
 }
 
 .task-summary {
@@ -313,6 +358,114 @@ input:not([type='checkbox']):focus {
   font-size: 1.25rem;
 }
 
+.admin-section + .admin-section {
+  margin-top: 38px;
+  padding-top: 34px;
+  border-top: 1px solid var(--line);
+}
+
+.admin-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 18px;
+}
+
+.admin-section-heading h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+
+.admin-section-heading p,
+.admin-empty,
+.invite-result p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.invite-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 145px auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.invite-form button,
+.copy-row button {
+  min-height: 48px;
+  padding: 0 18px;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  color: var(--paper);
+  background: var(--ink);
+  font-weight: 700;
+}
+
+.invite-form button:hover,
+.copy-row button:hover {
+  background: var(--accent);
+}
+
+.invite-result {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid var(--green);
+  background: #eef8f1;
+}
+
+.copy-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.copy-row input {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.72rem;
+}
+
+.admin-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 64px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.admin-list-item:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-list-item strong,
+.admin-list-item span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.admin-list-item strong {
+  font-size: 0.85rem;
+}
+
+.admin-list-item span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.admin-empty {
+  padding: 18px 0 0;
+}
+
 .error-message {
   margin: 24px 0 0;
   padding: 14px 16px;
@@ -358,7 +511,20 @@ input:not([type='checkbox']):focus {
     flex-direction: column;
   }
 
-  .task-form button {
+  .invite-form {
+    grid-template-columns: 1fr;
+  }
+
+  .copy-row,
+  .admin-section-heading,
+  .admin-list-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .task-form button,
+  .invite-form button,
+  .copy-row button {
     min-height: 48px;
   }
 

@@ -13,10 +13,16 @@ const config = {
 
 const db = new Surreal();
 const todos = new Table('todo');
+const invitations = new Table('invitation');
+const invitationFromUrl = consumeInvitationFragment();
 
 const elements = {
   connectionCard: document.querySelector('#connection-card'),
   googleButton: document.querySelector('#google-button'),
+  invitationNotice: document.querySelector('#invitation-notice'),
+  pendingCard: document.querySelector('#pending-card'),
+  pendingEmail: document.querySelector('#pending-email'),
+  checkApprovalButton: document.querySelector('#check-approval-button'),
   tasksCard: document.querySelector('#tasks-card'),
   taskForm: document.querySelector('#task-form'),
   taskInput: document.querySelector('#new-task'),
@@ -24,6 +30,18 @@ const elements = {
   taskCount: document.querySelector('#task-count'),
   emptyState: document.querySelector('#empty-state'),
   refreshButton: document.querySelector('#refresh-button'),
+  adminCard: document.querySelector('#admin-card'),
+  refreshAdminButton: document.querySelector('#refresh-admin-button'),
+  pendingUserList: document.querySelector('#pending-user-list'),
+  pendingUserEmpty: document.querySelector('#pending-user-empty'),
+  inviteForm: document.querySelector('#invite-form'),
+  inviteEmail: document.querySelector('#invite-email'),
+  inviteExpiry: document.querySelector('#invite-expiry'),
+  inviteResult: document.querySelector('#invite-result'),
+  inviteLink: document.querySelector('#invite-link'),
+  copyInviteButton: document.querySelector('#copy-invite-button'),
+  invitationList: document.querySelector('#invitation-list'),
+  invitationEmpty: document.querySelector('#invitation-empty'),
   logoutButton: document.querySelector('#logout-button'),
   status: document.querySelector('#status'),
   statusText: document.querySelector('#status-text'),
@@ -32,12 +50,22 @@ const elements = {
 
 let tasks = [];
 let signedInUser = null;
+let currentProfile = null;
+let pendingUsers = [];
+let activeInvitations = [];
+let invitationToken = invitationFromUrl.token;
 
 elements.logoutButton.addEventListener('click', logout);
+elements.checkApprovalButton.addEventListener('click', checkApproval);
 elements.taskForm.addEventListener('submit', createTask);
 elements.refreshButton.addEventListener('click', loadTasks);
 elements.taskList.addEventListener('change', toggleTask);
 elements.taskList.addEventListener('click', deleteTask);
+elements.refreshAdminButton.addEventListener('click', loadAdminData);
+elements.inviteForm.addEventListener('submit', createInvitation);
+elements.copyInviteButton.addEventListener('click', copyInvitationLink);
+elements.pendingUserList.addEventListener('click', approveUser);
+elements.invitationList.addEventListener('click', revokeInvitation);
 window.addEventListener('pagehide', () => {
   void db.close().catch(() => {});
 });
@@ -74,7 +102,12 @@ async function initializeSignIn() {
       text: 'continue_with',
       width: Math.min(360, elements.googleButton.clientWidth || 360),
     });
+    elements.invitationNotice.hidden = !invitationToken;
     setStatus('offline', 'Signed out');
+
+    if (invitationFromUrl.invalid) {
+      showMessage('This invitation link is malformed. Ask the administrator for a new link.');
+    }
   } catch (error) {
     showError(error, 'Google Sign-In could not be loaded.');
   }
@@ -102,7 +135,7 @@ function loadGoogleIdentityScript() {
   });
 }
 
-/** Exchanges a verified Google credential for a narrowly scoped SurrealDB record token. */
+/** Exchanges a Google credential and optional invitation for a SurrealDB record token. */
 async function authenticateWithGoogle({ credential }) {
   clearError();
   setStatus('connecting', 'Signing in…');
@@ -112,7 +145,7 @@ async function authenticateWithGoogle({ credential }) {
     const response = await fetch(`${config.authBrokerUrl}/auth/google`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ credential }),
+      body: JSON.stringify({ credential, invitation: invitationToken || undefined }),
       credentials: 'omit',
     });
     const result = await response.json().catch(() => ({}));
@@ -129,18 +162,67 @@ async function authenticateWithGoogle({ credential }) {
     await db.authenticate(result.token);
 
     signedInUser = result.user || null;
-    elements.connectionCard.hidden = true;
-    elements.logoutButton.hidden = false;
-    elements.tasksCard.hidden = false;
-    setStatus('online', signedInUser?.name ? `Signed in · ${signedInUser.name}` : 'Signed in');
-    await loadTasks();
-    elements.taskInput.focus();
+    currentProfile = await loadCurrentProfile();
+    invitationToken = null;
+    elements.invitationNotice.hidden = true;
+    await showAuthenticatedView();
   } catch (error) {
     setStatus('offline', 'Sign-in failed');
     showError(error, 'Could not sign in.');
     await db.close().catch(() => {});
   } finally {
     elements.googleButton.classList.remove('is-busy');
+  }
+}
+
+/** Loads approval and administrator flags from the authenticated user record. */
+async function loadCurrentProfile() {
+  const [profiles] = await db.query(
+    'SELECT id, email, name, picture, approved, approved_at, is_admin FROM user WHERE id = $auth.id',
+  );
+  const profile = profiles?.[0];
+
+  if (!profile) throw new Error('Your user profile could not be loaded.');
+  return profile;
+}
+
+/** Switches between pending, regular-user, and administrator interfaces. */
+async function showAuthenticatedView() {
+  const approved = currentProfile?.approved === true;
+  const isAdmin = approved && currentProfile?.is_admin === true;
+  const displayName = currentProfile?.name || signedInUser?.name;
+
+  elements.connectionCard.hidden = true;
+  elements.logoutButton.hidden = false;
+  elements.pendingCard.hidden = approved;
+  elements.tasksCard.hidden = !approved;
+  elements.adminCard.hidden = !isAdmin;
+
+  if (!approved) {
+    elements.pendingEmail.textContent = currentProfile?.email || signedInUser?.email || '';
+    setStatus('pending', displayName ? `Pending · ${displayName}` : 'Approval pending');
+    return;
+  }
+
+  setStatus('online', displayName ? `Signed in · ${displayName}` : 'Signed in');
+  await loadTasks();
+  if (isAdmin) await loadAdminData();
+  elements.taskInput.focus();
+}
+
+/** Rechecks an authenticated pending user's approval without requiring another Google sign-in. */
+async function checkApproval() {
+  clearError();
+  setBusy(elements.checkApprovalButton, true, 'Checking…');
+
+  try {
+    currentProfile = await loadCurrentProfile();
+    await showAuthenticatedView();
+    if (!currentProfile.approved) setStatus('pending', 'Still awaiting approval');
+  } catch (error) {
+    showError(error, 'Could not check approval.');
+  } finally {
+    setBusy(elements.checkApprovalButton, false, 'Check approval');
   }
 }
 
@@ -157,11 +239,18 @@ async function logout() {
   } finally {
     window.google?.accounts?.id?.disableAutoSelect();
     signedInUser = null;
+    currentProfile = null;
     tasks = [];
+    pendingUsers = [];
+    activeInvitations = [];
     renderTasks();
+    renderAdminData();
     elements.tasksCard.hidden = true;
+    elements.pendingCard.hidden = true;
+    elements.adminCard.hidden = true;
     elements.connectionCard.hidden = false;
     elements.logoutButton.hidden = true;
+    elements.inviteResult.hidden = true;
     setBusy(elements.logoutButton, false, 'Logout');
     setStatus('offline', 'Signed out');
   }
@@ -182,7 +271,7 @@ async function loadTasks() {
   }
 }
 
-/** Creates a todo owned by the authenticated record user. */
+/** Creates a todo owned by the authenticated, approved record user. */
 async function createTask(event) {
   event.preventDefault();
   clearError();
@@ -194,7 +283,6 @@ async function createTask(event) {
   setBusy(button, true, 'Adding…');
 
   try {
-    // The schema assigns owner=$auth and created_at=time::now(); the browser cannot override them.
     await db.create(todos).content({ title, done: false });
     elements.taskForm.reset();
     await loadTasks();
@@ -238,12 +326,129 @@ async function deleteTask(event) {
   clearError();
 
   try {
-    const id = task.id instanceof RecordId ? task.id : new RecordId('todo', task.id);
-    await db.delete(id);
+    await db.delete(asRecordId('todo', task.id));
     await loadTasks();
   } catch (error) {
     setBusy(button, false, 'Delete');
     showError(error, 'Could not delete the task.');
+  }
+}
+
+/** Loads pending users and unexpired invitations for the administrator. */
+async function loadAdminData() {
+  if (!currentProfile?.is_admin) return;
+
+  clearError();
+  setBusy(elements.refreshAdminButton, true, 'Refreshing…');
+
+  try {
+    [pendingUsers, activeInvitations] = await db.query(`
+      SELECT id, email, name, created_at, last_login
+        FROM user WHERE approved = false ORDER BY created_at ASC;
+      SELECT id, email, status, expires_at, created_at
+        FROM invitation
+        WHERE status = "pending" AND expires_at > time::now()
+        ORDER BY created_at DESC;
+    `);
+    renderAdminData();
+  } catch (error) {
+    showError(error, 'Could not load administrator data.');
+  } finally {
+    setBusy(elements.refreshAdminButton, false, 'Refresh');
+  }
+}
+
+/** Creates an email-bound invitation while retaining only its token hash. */
+async function createInvitation(event) {
+  event.preventDefault();
+  clearError();
+
+  const email = elements.inviteEmail.value.trim().toLowerCase();
+  const days = Number(elements.inviteExpiry.value);
+  const button = elements.inviteForm.querySelector('button[type="submit"]');
+  setBusy(button, true, 'Creating…');
+
+  try {
+    const invitation = generateInvitationToken();
+    const tokenHash = await hashInvitationToken(invitation);
+    const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+
+    await db.query(
+      'UPDATE invitation SET status = "revoked" WHERE email = $email AND status = "pending"',
+      { email },
+    );
+    await db.create(invitations).content({
+      email,
+      token_hash: tokenHash,
+      status: 'pending',
+      expires_at: expiresAt,
+    });
+
+    elements.inviteLink.value = buildInvitationLink(invitation);
+    elements.inviteResult.hidden = false;
+    elements.inviteForm.reset();
+    await loadAdminData();
+    elements.inviteLink.focus();
+    elements.inviteLink.select();
+  } catch (error) {
+    showError(error, 'Could not create the invitation.');
+  } finally {
+    setBusy(button, false, 'Create invitation');
+  }
+}
+
+/** Copies the one-time invitation link produced by the latest create operation. */
+async function copyInvitationLink() {
+  clearError();
+
+  try {
+    await navigator.clipboard.writeText(elements.inviteLink.value);
+    setBusy(elements.copyInviteButton, true, 'Copied');
+    window.setTimeout(() => setBusy(elements.copyInviteButton, false, 'Copy link'), 1200);
+  } catch (error) {
+    elements.inviteLink.focus();
+    elements.inviteLink.select();
+    showError(error, 'Automatic copying failed; copy the selected link manually.');
+  }
+}
+
+/** Approves one pending user through protected field permissions. */
+async function approveUser(event) {
+  const button = event.target.closest('[data-action="approve-user"]');
+  if (!button) return;
+
+  const user = pendingUsers.find(({ id }) => id.toString() === button.dataset.id);
+  if (!user) return;
+
+  clearError();
+  setBusy(button, true, 'Approving…');
+
+  try {
+    await db.update(user.id).merge({ approved: true, approved_at: new Date() });
+    await loadAdminData();
+  } catch (error) {
+    setBusy(button, false, 'Approve');
+    showError(error, 'Could not approve the user.');
+  }
+}
+
+/** Revokes an unused invitation without exposing or recovering its token. */
+async function revokeInvitation(event) {
+  const button = event.target.closest('[data-action="revoke-invitation"]');
+  if (!button) return;
+
+  const invitation = activeInvitations.find(({ id }) => id.toString() === button.dataset.id);
+  if (!invitation) return;
+
+  clearError();
+  setBusy(button, true, 'Revoking…');
+
+  try {
+    await db.update(invitation.id).merge({ status: 'revoked' });
+    await loadAdminData();
+  } catch (error) {
+    setBusy(button, false, 'Revoke');
+    showError(error, 'Could not revoke the invitation.');
   }
 }
 
@@ -273,16 +478,102 @@ function taskItem(task) {
   title.className = 'task-title';
   title.textContent = task.title;
 
-  const remove = document.createElement('button');
-  remove.type = 'button';
+  const remove = actionButton('Delete', 'delete', task.id);
   remove.className = 'delete-button';
-  remove.dataset.action = 'delete';
-  remove.dataset.id = task.id.toString();
-  remove.textContent = 'Delete';
   remove.setAttribute('aria-label', `Delete “${task.title}”`);
 
   item.append(checkbox, title, remove);
   return item;
+}
+
+/** Renders administrator lists without inserting untrusted text as HTML. */
+function renderAdminData() {
+  elements.pendingUserList.replaceChildren(
+    ...pendingUsers.map((user) =>
+      adminListItem(
+        user.email,
+        `${user.name || 'Unnamed user'} · registered ${formatDate(user.created_at)}`,
+        actionButton('Approve', 'approve-user', user.id),
+      ),
+    ),
+  );
+  elements.pendingUserEmpty.hidden = pendingUsers.length > 0;
+
+  elements.invitationList.replaceChildren(
+    ...activeInvitations.map((invitation) =>
+      adminListItem(
+        invitation.email,
+        `Expires ${formatDate(invitation.expires_at)}`,
+        actionButton('Revoke', 'revoke-invitation', invitation.id),
+      ),
+    ),
+  );
+  elements.invitationEmpty.hidden = activeInvitations.length > 0;
+}
+
+function adminListItem(titleText, detailText, button) {
+  const item = document.createElement('li');
+  item.className = 'admin-list-item';
+
+  const identity = document.createElement('div');
+  const title = document.createElement('strong');
+  const detail = document.createElement('span');
+  title.textContent = titleText;
+  detail.textContent = detailText;
+  identity.append(title, detail);
+  item.append(identity, button);
+  return item;
+}
+
+function actionButton(label, action, id) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'secondary-button';
+  button.dataset.action = action;
+  button.dataset.id = id.toString();
+  button.textContent = label;
+  return button;
+}
+
+function asRecordId(table, value) {
+  return value instanceof RecordId ? value : new RecordId(table, value);
+}
+
+function generateInvitationToken() {
+  return bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+}
+
+async function hashInvitationToken(token) {
+  const bytes = new TextEncoder().encode(token);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return bytesToBase64Url(new Uint8Array(digest));
+}
+
+function bytesToBase64Url(bytes) {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+}
+
+function buildInvitationLink(token) {
+  return `${window.location.origin}${window.location.pathname}#invite=${token}`;
+}
+
+/** Reads an invitation once, then removes it from the address bar and browser history. */
+function consumeInvitationFragment() {
+  const parameters = new URLSearchParams(window.location.hash.slice(1));
+  if (!parameters.has('invite')) return { token: null, invalid: false };
+
+  const token = parameters.get('invite') || '';
+  const valid = /^[A-Za-z0-9_-]{43}$/.test(token);
+  window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+  return { token: valid ? token : null, invalid: !valid };
+}
+
+function formatDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'unknown';
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
 function setStatus(state, text) {

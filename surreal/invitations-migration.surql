@@ -1,5 +1,5 @@
--- Run this as a database owner in Surrealist after replacing the four
--- __PLACEHOLDER__ values. Never commit the resulting secret-bearing file.
+-- Upgrade an existing Tiny Tasks database without redefining its JWT key.
+-- Replace __ADMIN_EMAIL__ with the Google email of the administrator.
 USE NS main DB main;
 
 DEFINE TABLE OVERWRITE user SCHEMAFULL
@@ -75,72 +75,58 @@ DEFINE TABLE OVERWRITE todo SCHEMAFULL
     FOR select, create, update, delete
       WHERE owner = $auth.id AND $auth.approved = true;
 
-DEFINE FIELD OVERWRITE title ON TABLE todo TYPE string
-  ASSERT string::len($value) > 0 AND string::len($value) <= 120;
-DEFINE FIELD OVERWRITE done ON TABLE todo TYPE bool DEFAULT false;
-DEFINE FIELD OVERWRITE owner ON TABLE todo TYPE record<user> DEFAULT $auth.id READONLY;
-DEFINE FIELD OVERWRITE created_at ON TABLE todo TYPE datetime DEFAULT time::now() READONLY;
-DEFINE FIELD OVERWRITE updated_at ON TABLE todo TYPE datetime VALUE time::now();
-DEFINE INDEX OVERWRITE todo_owner_created ON TABLE todo FIELDS owner, created_at;
+ALTER ACCESS google ON DATABASE AUTHENTICATE {
+  IF $token.iss != "tiny-tasks-auth" {
+    THROW "Invalid token issuer";
+  };
+  IF $token.aud != "tiny-tasks-surrealdb" {
+    THROW "Invalid token audience";
+  };
+  IF $token.email_verified != true OR $token.sub IS NONE OR $token.email IS NONE {
+    THROW "Incomplete identity";
+  };
 
-DEFINE ACCESS OVERWRITE google ON DATABASE TYPE RECORD
-  WITH JWT ALGORITHM HS512 KEY "__SURREAL_JWT_SECRET__"
-  AUTHENTICATE {
-    IF $token.iss != "__TOKEN_ISSUER__" {
-      THROW "Invalid token issuer";
+  LET $user = type::record("user", string::concat("google_", $token.sub));
+  UPSERT ONLY $user MERGE {
+    google_sub: $token.sub,
+    email: $token.email,
+    name: $token.name,
+    picture: $token.picture,
+    last_login: time::now()
+  };
+
+  IF string::lowercase(string::trim($token.email)) =
+     string::lowercase("__ADMIN_EMAIL__") {
+    UPDATE ONLY $user SET
+      approved = true,
+      approved_at = time::now(),
+      is_admin = true;
+  };
+
+  IF $token.invitation_hash IS NOT NONE {
+    LET $invitation = array::first(
+      SELECT * FROM invitation
+      WHERE token_hash = $token.invitation_hash
+        AND email = string::lowercase(string::trim($token.email))
+        AND status = "pending"
+        AND expires_at > time::now()
+      LIMIT 1
+    );
+
+    IF $invitation IS NOT NONE {
+      UPDATE ONLY $user SET approved = true, approved_at = time::now();
+      UPDATE ONLY $invitation SET
+        status = "accepted",
+        accepted_by = $user,
+        accepted_at = time::now();
     };
-    IF $token.aud != "__TOKEN_AUDIENCE__" {
-      THROW "Invalid token audience";
-    };
-    IF $token.email_verified != true OR $token.sub IS NONE OR $token.email IS NONE {
-      THROW "Incomplete identity";
-    };
+  };
 
-    LET $user = type::record("user", string::concat("google_", $token.sub));
-    UPSERT ONLY $user MERGE {
-      google_sub: $token.sub,
-      email: $token.email,
-      name: $token.name,
-      picture: $token.picture,
-      last_login: time::now()
-    };
+  RETURN $user;
+};
 
-    IF string::lowercase(string::trim($token.email)) =
-       string::lowercase("__ADMIN_EMAIL__") {
-      UPDATE ONLY $user SET
-        approved = true,
-        approved_at = time::now(),
-        is_admin = true;
-    };
-
-    IF $token.invitation_hash IS NOT NONE {
-      LET $invitation = array::first(
-        SELECT * FROM invitation
-        WHERE token_hash = $token.invitation_hash
-          AND email = string::lowercase(string::trim($token.email))
-          AND status = "pending"
-          AND expires_at > time::now()
-        LIMIT 1
-      );
-
-      IF $invitation IS NOT NONE {
-        UPDATE ONLY $user SET approved = true, approved_at = time::now();
-        UPDATE ONLY $invitation SET
-          status = "accepted",
-          accepted_by = $user,
-          accepted_at = time::now();
-      };
-    };
-
-    RETURN $user;
-  }
-  DURATION FOR SESSION 1h;
-
--- Backfill the approval fields on records created before this schema version.
 UPDATE user SET approved = false WHERE approved IS NONE;
 UPDATE user SET is_admin = false WHERE is_admin IS NONE;
-
--- The administrator must already have signed in at least once.
 UPDATE user SET
   approved = true,
   approved_at = time::now(),

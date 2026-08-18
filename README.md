@@ -1,8 +1,8 @@
 # Tiny Tasks: Google Sign-In + SurrealDB Cloud
 
-A browser-based private task list. The static app is deployable to GitHub Pages, while a small
-Cloudflare Worker verifies Google ID tokens and exchanges them for 15-minute SurrealDB record-user
-tokens.
+A browser-based private task list with administrator approval and single-use invitations. The
+static app is deployable to GitHub Pages, while a small Cloudflare Worker verifies Google ID tokens
+and exchanges them for 15-minute SurrealDB record-user tokens.
 
 ```text
 GitHub Pages ── Google ID token ──▶ Auth Worker
@@ -42,11 +42,30 @@ Open [surreal/schema.surql](surreal/schema.surql) and make a temporary, untracke
 2. Replace `__SURREAL_JWT_SECRET__` with the secret from step 1.
 3. Replace `__TOKEN_ISSUER__` with `tiny-tasks-auth`.
 4. Replace `__TOKEN_AUDIENCE__` with `tiny-tasks-surrealdb`.
-5. Run the script as a database owner in Surrealist.
+5. Replace `__ADMIN_EMAIL__` with the administrator's Google email.
+6. Run the script as a database owner in Surrealist. That verified Google email is automatically
+   approved and designated as administrator on first sign-in.
 
 The schema creates deterministic `user:google_<google-sub>` records at first login. The `todo` table uses
 record permissions and an immutable `owner` field, so every browser query is restricted to the
 signed-in user. Existing schema-less todos have no owner and will not be visible to record users.
+
+For a database created with an earlier Tiny Tasks schema, run
+[surreal/invitations-migration.surql](surreal/invitations-migration.surql). It uses `ALTER ACCESS`,
+so it preserves the existing JWT signing key and requires only the administrator email placeholder.
+
+## Registration and invitations
+
+- A first-time Google user without an invitation is registered as `approved: false` and sees an
+  approval-pending screen.
+- The administrator can approve pending users from the web app.
+- The administrator can create expiring invitation links bound to a normalized Google email.
+- Opening an invitation removes its token from the address bar before Google Sign-In begins.
+- The browser stores only a SHA-256 token hash in SurrealDB; the raw token is shown to the
+  administrator once.
+- A valid invitation is consumed on first matching Google sign-in and approves that user.
+- Invitations can be revoked before use. The administrator sends links manually, so no email
+  provider or additional API key is required.
 
 ## 3. Configure Google
 
@@ -120,5 +139,8 @@ relative asset URLs, so it works at `/repository-name/` as well as on a custom d
 - The Worker only accepts configured browser origins and returns no cookies.
 - Surreal tokens last 15 minutes and Surreal WebSocket sessions last at most one hour.
 - Tokens remain in memory; the app does not use local storage.
-- SurrealDB record permissions—not the UI—enforce task ownership.
+- SurrealDB record permissions—not the UI—enforce approval, administrator access, invitation
+  management, and task ownership.
+- Users cannot change their own approval or administrator fields.
+- Invitation tokens contain 256 bits of randomness and are stored only as SHA-256 hashes.
 - No root, namespace, or database-user credentials are shipped to the browser.

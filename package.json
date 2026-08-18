@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "node --test",
     "preview": "vite preview",
     "worker:login": "wrangler login",
     "worker:secret": "wrangler secret put SURREAL_JWT_SECRET --config worker/wrangler.toml",

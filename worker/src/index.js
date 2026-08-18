@@ -25,9 +25,14 @@ export default {
       assertConfiguration(env);
       const body = await request.json();
       const credential = body?.credential;
+      const invitation = body?.invitation;
 
       if (typeof credential !== 'string' || credential.length > 16_384) {
         return json({ error: 'A valid Google credential is required.' }, 400, origin, env);
+      }
+
+      if (invitation !== undefined && !isValidInvitationToken(invitation)) {
+        return json({ error: 'The invitation link is invalid.' }, 400, origin, env);
       }
 
       const { payload } = await jwtVerify(credential, googleKeys, {
@@ -45,6 +50,8 @@ export default {
         return json({ error: 'The Google account identity is incomplete.' }, 401, origin, env);
       }
 
+      const normalizedEmail = normalizeEmail(payload.email);
+      const invitationHash = invitation ? await hashInvitationToken(invitation) : undefined;
       const expiresInSeconds = 15 * 60;
       const token = await new SignJWT({
         ns: env.SURREAL_NAMESPACE,
@@ -52,10 +59,11 @@ export default {
         ac: env.SURREAL_ACCESS,
         id: `user:google_${payload.sub}`,
         sub: payload.sub,
-        email: payload.email,
+        email: normalizedEmail,
         email_verified: true,
         name: typeof payload.name === 'string' ? payload.name : payload.email,
         picture: typeof payload.picture === 'string' ? payload.picture : undefined,
+        invitation_hash: invitationHash,
       })
         .setProtectedHeader({ alg: 'HS512', typ: 'JWT' })
         .setIssuer(env.TOKEN_ISSUER)
@@ -72,7 +80,7 @@ export default {
           expiresAt: new Date(Date.now() + expiresInSeconds * 1000).toISOString(),
           user: {
             name: typeof payload.name === 'string' ? payload.name : payload.email,
-            email: payload.email,
+            email: normalizedEmail,
             picture: typeof payload.picture === 'string' ? payload.picture : null,
           },
         },
@@ -90,6 +98,25 @@ export default {
     }
   },
 };
+
+export function normalizeEmail(email) {
+  return email.trim().toLowerCase();
+}
+
+export function isValidInvitationToken(value) {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/.test(value);
+}
+
+export async function hashInvitationToken(token) {
+  const digest = await crypto.subtle.digest('SHA-256', encoder.encode(token));
+  return bytesToBase64Url(new Uint8Array(digest));
+}
+
+function bytesToBase64Url(bytes) {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+}
 
 function assertConfiguration(env) {
   const required = [
