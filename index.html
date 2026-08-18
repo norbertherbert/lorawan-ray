@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A small Vite and JavaScript example using SurrealDB Cloud"
+    />
+    <title>SurrealDB Cloud · Tiny Tasks</title>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">SurrealDB Cloud example</p>
+          <h1>Tiny Tasks</h1>
+          <p class="lede">A minimal browser app backed directly by your cloud database.</p>
+        </div>
+        <div class="session-actions">
+          <div class="status" id="status" data-state="offline">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span id="status-text">Not connected</span>
+          </div>
+          <button class="logout-button" type="button" id="logout-button" hidden>Logout</button>
+        </div>
+      </header>
+
+      <section class="card connection-card" id="connection-card">
+        <div class="section-heading">
+          <div>
+            <p class="section-label">Connection</p>
+            <h2>Sign in to the demo</h2>
+          </div>
+          <span class="number">01</span>
+        </div>
+
+        <form id="connect-form" class="connect-form">
+          <div class="connection-fields">
+            <div class="field host-field">
+              <label for="host">Host</label>
+              <input id="host" name="host" type="text" autocomplete="url" required />
+            </div>
+            <div class="field">
+              <label for="namespace">Namespace</label>
+              <input id="namespace" name="namespace" type="text" required />
+            </div>
+            <div class="field">
+              <label for="database">Database</label>
+              <input id="database" name="database" type="text" required />
+            </div>
+            <div class="field host-field">
+              <label for="username">Username</label>
+              <input id="username" name="username" type="text" autocomplete="username" required />
+            </div>
+          </div>
+
+          <label for="auth-level">Authentication scope</label>
+          <select id="auth-level" name="auth-level">
+            <option value="root">Root user</option>
+            <option value="namespace">Namespace user (main)</option>
+            <option value="database" selected>Database user (main/main)</option>
+          </select>
+          <label for="password">Database password</label>
+          <div class="input-row">
+            <input
+              id="password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              placeholder="Enter the password for nano-things-user"
+              required
+            />
+            <button type="submit" id="connect-button">Connect</button>
+          </div>
+          <p class="hint">
+            Use the password defined for this system user in Surrealist’s Authentication panel,
+            not your SurrealDB Cloud account password. It is kept in memory only.
+          </p>
+        </form>
+      </section>
+
+      <section class="card tasks-card" id="tasks-card" hidden>
+        <div class="section-heading">
+          <div>
+            <p class="section-label">Database records</p>
+            <h2>Your tasks</h2>
+          </div>
+          <span class="number">02</span>
+        </div>
+
+        <form id="task-form" class="task-form">
+          <label class="sr-only" for="new-task">New task</label>
+          <input
+            id="new-task"
+            name="title"
+            maxlength="120"
+            placeholder="What needs doing?"
+            autocomplete="off"
+            required
+          />
+          <button type="submit">Add task</button>
+        </form>
+
+        <div class="task-summary">
+          <span id="task-count">0 tasks</span>
+          <button class="text-button" type="button" id="refresh-button">Refresh</button>
+        </div>
+
+        <ul id="task-list" class="task-list" aria-live="polite"></ul>
+        <div id="empty-state" class="empty-state">
+          <span>✓</span>
+          <p>No tasks yet. Add the first one above.</p>
+        </div>
+      </section>
+
+      <p class="error-message" id="error-message" role="alert" hidden></p>
+    </main>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

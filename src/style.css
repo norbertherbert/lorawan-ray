@@ -1,0 +1,382 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap');
+
+:root {
+  color: #181918;
+  background: #f1f0ea;
+  font-family: 'Manrope', sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --ink: #181918;
+  --paper: #fffefa;
+  --muted: #73746f;
+  --line: #d8d7d0;
+  --accent: #ff4f00;
+  --green: #277a53;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background:
+    linear-gradient(rgba(24, 25, 24, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(24, 25, 24, 0.045) 1px, transparent 1px),
+    #f1f0ea;
+  background-size: 32px 32px;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.shell {
+  width: min(900px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 72px 0;
+}
+
+.hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+  margin-bottom: 40px;
+}
+
+.eyebrow,
+.section-label,
+.number,
+.status,
+dt {
+  font-family: 'DM Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.eyebrow,
+.section-label {
+  margin: 0 0 9px;
+  color: var(--accent);
+  font-size: 0.74rem;
+  font-weight: 500;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(3rem, 9vw, 6.5rem);
+  line-height: 0.92;
+  letter-spacing: -0.07em;
+}
+
+.lede {
+  max-width: 540px;
+  margin: 20px 0 0;
+  color: var(--muted);
+  font-size: 1.05rem;
+}
+
+.status {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 254, 250, 0.8);
+  font-size: 0.68rem;
+}
+
+.session-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.logout-button {
+  padding: 10px 14px;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  color: var(--paper);
+  background: var(--ink);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.logout-button:hover {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #a1a19c;
+}
+
+.status[data-state='online'] .status-dot {
+  background: var(--green);
+  box-shadow: 0 0 0 4px rgba(39, 122, 83, 0.13);
+}
+
+.status[data-state='connecting'] .status-dot {
+  background: #e2a80a;
+  animation: pulse 1s infinite alternate;
+}
+
+.card {
+  margin-bottom: 18px;
+  padding: clamp(24px, 5vw, 42px);
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+  background: var(--paper);
+  box-shadow: 7px 7px 0 var(--ink);
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+h2 {
+  margin: 0;
+  font-size: clamp(1.55rem, 4vw, 2.25rem);
+  letter-spacing: -0.045em;
+}
+
+.number {
+  color: #a2a29d;
+  font-size: 0.75rem;
+}
+
+.connection-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin: 0 0 30px;
+}
+
+.host-field {
+  grid-column: 1 / -1;
+}
+
+label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.input-row,
+.task-form {
+  display: flex;
+  gap: 10px;
+}
+
+input:not([type='checkbox']),
+select {
+  width: 100%;
+  min-width: 0;
+  padding: 14px 15px;
+  border: 1px solid #aaa9a3;
+  border-radius: 2px;
+  outline: none;
+  background: #fff;
+}
+
+select {
+  margin-bottom: 18px;
+}
+
+input:not([type='checkbox']):focus,
+select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255, 79, 0, 0.13);
+}
+
+.input-row button,
+.task-form button {
+  flex: 0 0 auto;
+  padding: 0 23px;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  color: #fff;
+  background: var(--ink);
+  font-weight: 700;
+}
+
+.input-row button:hover,
+.task-form button:hover {
+  background: var(--accent);
+}
+
+.hint {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.tasks-card {
+  margin-top: 28px;
+}
+
+.task-summary {
+  display: flex;
+  justify-content: space-between;
+  margin: 24px 0 8px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.text-button,
+.delete-button {
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  color: inherit;
+  background: transparent;
+  font-size: 0.78rem;
+}
+
+.task-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task-item {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 58px;
+  border-top: 1px solid var(--line);
+}
+
+.task-item:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.task-item input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--accent);
+}
+
+.task-item.is-done .task-title {
+  color: #94948e;
+  text-decoration: line-through;
+}
+
+.delete-button {
+  visibility: hidden;
+  color: #a33b25;
+}
+
+.task-item:hover .delete-button,
+.delete-button:focus {
+  visibility: visible;
+}
+
+.empty-state {
+  padding: 44px 16px 24px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.empty-state span {
+  display: inline-grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--green);
+  font-size: 1.25rem;
+}
+
+.error-message {
+  margin: 24px 0 0;
+  padding: 14px 16px;
+  border-left: 4px solid #a33b25;
+  color: #7f2817;
+  background: #ffe8df;
+  font-size: 0.85rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+@keyframes pulse {
+  to {
+    opacity: 0.35;
+  }
+}
+
+@media (max-width: 640px) {
+  .shell {
+    padding: 42px 0;
+  }
+
+  .hero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .input-row,
+  .task-form {
+    flex-direction: column;
+  }
+
+  .input-row button,
+  .task-form button {
+    min-height: 48px;
+  }
+
+  .connection-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .host-field {
+    grid-column: auto;
+  }
+
+  .delete-button {
+    visibility: visible;
+  }
+}
