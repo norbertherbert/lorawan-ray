@@ -408,9 +408,6 @@ export default function App() {
           <div>
             <p className="eyebrow">SurrealDB Cloud</p>
             <h1>LoRaWAN Sniffer</h1>
-            <p className="lede">
-              A focused view of uplinks received by your packet-forwarder gateways.
-            </p>
           </div>
           <div className="session-actions">
             <div className="status" data-state={status.state}>

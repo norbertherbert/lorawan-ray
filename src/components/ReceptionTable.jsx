@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react';
 import { ArrowDownIcon, ArrowUpIcon, EyeIcon, RefreshButton } from './Icons.jsx';
 import { formatDate } from '../lib.js';
 import ReceptionFilters from './ReceptionFilters.jsx';
@@ -28,6 +29,44 @@ export default function ReceptionTable({
   onSelect,
 }) {
   const noun = receptions.length === 1 ? 'reception' : 'receptions';
+  const topScrollRef = useRef(null);
+  const topScrollSpacerRef = useRef(null);
+  const tableWrapRef = useRef(null);
+  const tableRef = useRef(null);
+  const [tableOverflows, setTableOverflows] = useState(false);
+
+  useLayoutEffect(() => {
+    const topScroll = topScrollRef.current;
+    const spacer = topScrollSpacerRef.current;
+    const tableWrap = tableWrapRef.current;
+    const table = tableRef.current;
+    if (!topScroll || !spacer || !tableWrap || !table) return undefined;
+
+    function updateTopScrollbar() {
+      spacer.style.width = `${table.scrollWidth}px`;
+      setTableOverflows(table.scrollWidth > tableWrap.clientWidth + 1);
+      topScroll.scrollLeft = tableWrap.scrollLeft;
+    }
+
+    updateTopScrollbar();
+    const observer =
+      typeof ResizeObserver === 'function' ? new ResizeObserver(updateTopScrollbar) : null;
+    observer?.observe(table);
+    observer?.observe(tableWrap);
+    window.addEventListener('resize', updateTopScrollbar);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', updateTopScrollbar);
+    };
+  }, [receptions]);
+
+  function syncHorizontalScroll(source, targetRef) {
+    const target = targetRef.current;
+    if (target && target.scrollLeft !== source.scrollLeft) {
+      target.scrollLeft = source.scrollLeft;
+    }
+  }
 
   return (
     <section className="card receptions-card" id="receptions-card">
@@ -85,8 +124,24 @@ export default function ReceptionTable({
         <span>{`Page ${page + 1} · ${receptions.length} ${noun}`}</span>
       </div>
 
-      <div className="reception-table-wrap" hidden={receptions.length === 0}>
-        <table>
+      <div
+        ref={topScrollRef}
+        className="reception-table-top-scroll"
+        aria-label="Scroll reception table horizontally"
+        tabIndex="0"
+        hidden={receptions.length === 0 || !tableOverflows}
+        onScroll={(event) => syncHorizontalScroll(event.currentTarget, tableWrapRef)}
+      >
+        <div ref={topScrollSpacerRef} className="reception-table-top-scroll-spacer" />
+      </div>
+
+      <div
+        ref={tableWrapRef}
+        className="reception-table-wrap"
+        hidden={receptions.length === 0}
+        onScroll={(event) => syncHorizontalScroll(event.currentTarget, topScrollRef)}
+      >
+        <table ref={tableRef}>
           <thead>
             <tr>
               {columns.map(([label]) => (
@@ -94,7 +149,7 @@ export default function ReceptionTable({
                   {label}
                 </th>
               ))}
-              <th scope="col">
+              <th className="reception-action" scope="col">
                 <span className="sr-only">Details</span>
               </th>
             </tr>

@@ -15,6 +15,7 @@
 }
 
 html {
+  overflow-x: hidden;
   scrollbar-gutter: stable;
 }
 
@@ -26,6 +27,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
+  overflow-x: hidden;
   background:
     linear-gradient(rgba(24, 25, 24, 0.045) 1px, transparent 1px),
     linear-gradient(90deg, rgba(24, 25, 24, 0.045) 1px, transparent 1px),
@@ -49,7 +51,7 @@ button:disabled {
 }
 
 .shell {
-  width: min(1100px, calc(100% - 32px));
+  width: min(1200px, calc(100% - 16px));
   margin: 0 auto;
   padding: 72px 0;
 }
@@ -86,13 +88,6 @@ h1 {
   line-height: 1;
   letter-spacing: -0.055em;
   white-space: nowrap;
-}
-
-.lede {
-  max-width: 540px;
-  margin: 20px 0 0;
-  color: var(--muted);
-  font-size: 1.05rem;
 }
 
 .status {
@@ -169,7 +164,7 @@ h1 {
 .card {
   width: 100%;
   margin-bottom: 18px;
-  padding: clamp(24px, 5vw, 42px);
+  padding: clamp(24px, 3.5vw, 36px);
   border: 1px solid var(--ink);
   border-radius: 3px;
   background: var(--paper);
@@ -252,7 +247,9 @@ select:focus {
 }
 
 .receptions-card {
+  min-width: 0;
   margin-top: 28px;
+  overflow-x: clip;
 }
 
 .pending-card,
@@ -432,11 +429,31 @@ select:focus {
   font-size: 0.8rem;
 }
 
+.reception-table-top-scroll {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  height: 15px;
+  margin-bottom: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.reception-table-top-scroll-spacer {
+  height: 1px;
+}
+
 .reception-table-wrap {
   width: 100%;
+  min-width: 0;
   max-width: 100%;
   overflow-x: auto;
+  scrollbar-width: none;
   border: 1px solid var(--line);
+}
+
+.reception-table-wrap::-webkit-scrollbar {
+  display: none;
 }
 
 .reception-table-wrap table {
@@ -450,7 +467,7 @@ select:focus {
 
 .reception-table-wrap th,
 .reception-table-wrap td {
-  padding: 14px 16px;
+  padding: 14px 12px;
   border-bottom: 1px solid var(--line);
   text-align: left;
   white-space: nowrap;
@@ -474,8 +491,14 @@ select:focus {
 }
 
 .reception-action {
-  width: 1%;
+  width: 76px;
+  min-width: 76px;
+  padding-right: 20px !important;
   text-align: right !important;
+}
+
+.reception-action .details-button {
+  margin-right: 4px;
 }
 
 .details-button,
@@ -812,16 +835,6 @@ select:focus {
 }
 
 @media (max-width: 900px) {
-  .filter-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 640px) {
-  .shell {
-    padding: 42px 0;
-  }
-
   .hero {
     align-items: flex-start;
     flex-direction: column;
@@ -840,6 +853,16 @@ select:focus {
     grid-row: 2;
     justify-content: space-between;
     justify-self: stretch;
+  }
+
+  .filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .shell {
+    padding: 42px 0;
   }
 
   .filter-grid {
