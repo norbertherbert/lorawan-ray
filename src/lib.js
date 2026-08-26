@@ -1,0 +1,83 @@
+/** Loads Google Identity Services once and resolves when its browser API is available. */
+export function loadGoogleIdentityScript() {
+  if (window.google?.accounts?.id) return Promise.resolve();
+
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-google-identity]');
+    const script = existing || document.createElement('script');
+
+    script.addEventListener('load', resolve, { once: true });
+    script.addEventListener(
+      'error',
+      () => reject(new Error('Could not load accounts.google.com.')),
+      { once: true },
+    );
+
+    if (!existing) {
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.dataset.googleIdentity = 'true';
+      document.head.append(script);
+    }
+  });
+}
+
+/** Reads an invitation once, then removes it from the address bar and browser history. */
+export function consumeInvitationFragment() {
+  const parameters = new URLSearchParams(window.location.hash.slice(1));
+  if (!parameters.has('invite')) return { token: null, invalid: false };
+
+  const token = parameters.get('invite') || '';
+  const valid = /^[A-Za-z0-9_-]{43}$/.test(token);
+  window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+  return { token: valid ? token : null, invalid: !valid };
+}
+
+export function formatDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'unknown';
+
+  const datePart = [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+    .map((part) => String(part).padStart(2, '0'))
+    .join('-');
+  const timePart = [date.getHours(), date.getMinutes(), date.getSeconds()]
+    .map((part) => String(part).padStart(2, '0'))
+    .join(':');
+  return `${datePart} ${timePart}`;
+}
+
+/** Produces readable JSON without the top-level SurrealDB record ID. */
+export function stringifyJson(value) {
+  const visibleEntries = Object.entries(value).filter(([key]) => key !== 'id');
+
+  return JSON.stringify(
+    Object.fromEntries(visibleEntries),
+    (_key, nestedValue) =>
+      typeof nestedValue === 'bigint' ? nestedValue.toString() : nestedValue,
+    2,
+  );
+}
+
+export function generateInvitationToken() {
+  return bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+}
+
+export async function hashInvitationToken(token) {
+  const bytes = new TextEncoder().encode(token);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return bytesToBase64Url(new Uint8Array(digest));
+}
+
+function bytesToBase64Url(bytes) {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+}
+
+export function buildInvitationLink(token) {
+  return `${window.location.origin}${window.location.pathname}#invite=${token}`;
+}
+
+export function errorMessage(error, fallback) {
+  return error instanceof Error ? `${fallback} ${error.message}` : fallback;
+}

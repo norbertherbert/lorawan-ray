@@ -1,8 +1,8 @@
-# Tiny Tasks: Google Sign-In + SurrealDB Cloud
+# LoRaWAN Sniffer: Google Sign-In + SurrealDB Cloud
 
-A browser-based private task list with administrator approval and single-use invitations. The
-static app is deployable to GitHub Pages, while a small Cloudflare Worker verifies Google ID tokens
-and exchanges them for 15-minute SurrealDB record-user tokens.
+A React-based, read-only viewer for the latest `gateway_rxpk` records, with administrator approval
+and single-use invitations. Vite builds the static app for GitHub Pages, while a small Cloudflare
+Worker verifies Google ID tokens and exchanges them for 15-minute SurrealDB record-user tokens.
 
 ```text
 GitHub Pages ── Google ID token ──▶ Auth Worker
@@ -14,7 +14,7 @@ GitHub Pages ── Google ID token ──▶ Auth Worker
 
 The Worker is necessary because Google ID tokens cannot contain SurrealDB's required `ns`, `db`,
 and `ac` claims. It never receives a SurrealDB system-user password and is not involved in normal
-task queries.
+reception queries.
 
 ## Prerequisites
 
@@ -38,7 +38,7 @@ This exact value is shared only between the Worker and SurrealDB. Never put it i
 
 Open [surreal/schema.surql](surreal/schema.surql) and make a temporary, untracked copy. In that copy:
 
-1. Change `USE NS main DB main` if needed.
+1. Initialize the listener schema in `NS lorawan DB sniffer` first so `gateway_rxpk` exists.
 2. Replace `__SURREAL_JWT_SECRET__` with the secret from step 1.
 3. Replace `__TOKEN_ISSUER__` with `tiny-tasks-auth`.
 4. Replace `__TOKEN_AUDIENCE__` with `tiny-tasks-surrealdb`.
@@ -46,13 +46,10 @@ Open [surreal/schema.surql](surreal/schema.surql) and make a temporary, untracke
 6. Run the script as a database owner in Surrealist. That verified Google email is automatically
    approved and designated as administrator on first sign-in.
 
-The schema creates deterministic `user:google_<google-sub>` records at first login. The `todo` table uses
-record permissions and an immutable `owner` field, so every browser query is restricted to the
-signed-in user. Existing schema-less todos have no owner and will not be visible to record users.
-
-For a database created with an earlier Tiny Tasks schema, run
-[surreal/invitations-migration.surql](surreal/invitations-migration.surql). It uses `ALTER ACCESS`,
-so it preserves the existing JWT signing key and requires only the administrator email placeholder.
+The schema creates deterministic `user:google_<google-sub>` records at first login. The listener's
+`init_db.surql` owns the `gateway_rxpk` permissions: approved Google users may select receptions,
+while gateway-specific creation is preserved and browser users cannot create, update, or delete
+receptions.
 
 ## Registration and invitations
 
@@ -82,7 +79,7 @@ OAuth origins contain only scheme, host, and port.
 Edit [worker/wrangler.toml](worker/wrangler.toml):
 
 - Set `GOOGLE_CLIENT_ID` to the Web client ID.
-- Change namespace/database if they are not `main/main`.
+- Keep namespace/database set to `lorawan/sniffer`.
 - Replace the GitHub origin in `ALLOWED_ORIGINS`.
 - Keep issuer/audience synchronized with the SurrealQL script.
 
@@ -140,7 +137,11 @@ relative asset URLs, so it works at `/repository-name/` as well as on a custom d
 - Surreal tokens last 15 minutes and Surreal WebSocket sessions last at most one hour.
 - Tokens remain in memory; the app does not use local storage.
 - SurrealDB record permissions—not the UI—enforce approval, administrator access, invitation
-  management, and task ownership.
+  management, and read-only reception access.
+- The reception table summarizes `ingested_at`, `gateway_id`, `mtype`, `dev_addr`, `fport`, `fcnt`,
+  `modu`, `datr`, and `freq`, with the complete read-only record available on demand in a JSON
+  viewer. Results are paginated in SurrealDB with 25 rows per page by default and can be filtered
+  by ingestion-time range, gateway ID, and DevAddr.
 - Users cannot change their own approval or administrator fields.
 - Invitation tokens contain 256 bits of randomness and are stored only as SHA-256 hashes.
 - No root, namespace, or database-user credentials are shipped to the browser.

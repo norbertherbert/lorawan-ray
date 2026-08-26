@@ -1,6 +1,6 @@
 -- Run this as a database owner in Surrealist after replacing the four
 -- __PLACEHOLDER__ values. Never commit the resulting secret-bearing file.
-USE NS main DB main;
+USE NS lorawan DB sniffer;
 
 DEFINE TABLE OVERWRITE user SCHEMAFULL
   PERMISSIONS
@@ -69,19 +69,6 @@ DEFINE FIELD OVERWRITE created_at ON TABLE invitation TYPE datetime
 DEFINE FIELD OVERWRITE accepted_at ON TABLE invitation TYPE option<datetime>;
 DEFINE INDEX OVERWRITE invitation_token_hash ON TABLE invitation FIELDS token_hash UNIQUE;
 DEFINE INDEX OVERWRITE invitation_email_status ON TABLE invitation FIELDS email, status;
-
-DEFINE TABLE OVERWRITE todo SCHEMAFULL
-  PERMISSIONS
-    FOR select, create, update, delete
-      WHERE owner = $auth.id AND $auth.approved = true;
-
-DEFINE FIELD OVERWRITE title ON TABLE todo TYPE string
-  ASSERT string::len($value) > 0 AND string::len($value) <= 120;
-DEFINE FIELD OVERWRITE done ON TABLE todo TYPE bool DEFAULT false;
-DEFINE FIELD OVERWRITE owner ON TABLE todo TYPE record<user> DEFAULT $auth.id READONLY;
-DEFINE FIELD OVERWRITE created_at ON TABLE todo TYPE datetime DEFAULT time::now() READONLY;
-DEFINE FIELD OVERWRITE updated_at ON TABLE todo TYPE datetime VALUE time::now();
-DEFINE INDEX OVERWRITE todo_owner_created ON TABLE todo FIELDS owner, created_at;
 
 DEFINE ACCESS OVERWRITE google ON DATABASE TYPE RECORD
   WITH JWT ALGORITHM HS512 KEY "__SURREAL_JWT_SECRET__"

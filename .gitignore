@@ -6,3 +6,4 @@ dist/
 .dev.vars
 worker/.dev.vars
 client_secret.json
+private_schema.surql
