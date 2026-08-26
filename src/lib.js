@@ -81,3 +81,38 @@ export function buildInvitationLink(token) {
 export function errorMessage(error, fallback) {
   return error instanceof Error ? `${fallback} ${error.message}` : fallback;
 }
+
+/** Reads a JWT expiry for client-side session UX. SurrealDB still verifies the token. */
+export function jwtExpirationTime(token) {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+
+    const base64 = payload.replaceAll('-', '+').replaceAll('_', '/');
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+    const expiration = Number(JSON.parse(atob(padded)).exp);
+    return Number.isFinite(expiration) ? expiration * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Matches current structured SurrealDB auth failures and their wrapped causes. */
+export function isSessionAuthenticationError(error) {
+  const visited = new Set();
+  let current = error;
+
+  while (current && typeof current === 'object' && !visited.has(current)) {
+    visited.add(current);
+    if (current.isTokenExpired === true) return true;
+
+    const details = current.details;
+    const authKind = details?.kind === 'Auth' ? details.details?.kind : null;
+    if (['TokenExpired', 'SessionExpired', 'InvalidAuth'].includes(authKind)) return true;
+
+    if (/\b(?:token|session)\b.*\bexpired\b/i.test(String(current.message || ''))) return true;
+    current = current.cause;
+  }
+
+  return false;
+}

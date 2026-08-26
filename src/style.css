@@ -14,6 +14,10 @@
   --green: #277a53;
 }
 
+html {
+  scrollbar-gutter: stable;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -163,6 +167,7 @@ h1 {
 }
 
 .card {
+  width: 100%;
   margin-bottom: 18px;
   padding: clamp(24px, 5vw, 42px);
   border: 1px solid var(--ink);
@@ -247,12 +252,7 @@ select:focus {
 }
 
 .receptions-card {
-  width: fit-content;
-  min-width: 100%;
-  max-width: calc(100vw - 32px);
   margin-top: 28px;
-  margin-left: 50%;
-  transform: translateX(-50%);
 }
 
 .pending-card,

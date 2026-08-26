@@ -9,6 +9,8 @@ import {
   errorMessage,
   generateInvitationToken,
   hashInvitationToken,
+  isSessionAuthenticationError,
+  jwtExpirationTime,
   loadGoogleIdentityScript,
 } from './lib.js';
 import { buildReceptionPageQuery, emptyReceptionFilters } from './receptions.js';
@@ -54,6 +56,9 @@ export default function App() {
   const [logoutBusy, setLogoutBusy] = useState(false);
   const googleButtonRef = useRef(null);
   const authenticationHandlerRef = useRef(null);
+  const sessionExpiresAtRef = useRef(null);
+  const sessionExpiryTimerRef = useRef(null);
+  const sessionExpiryHandlingRef = useRef(false);
 
   const approved = currentProfile?.approved === true;
   const isAdmin = approved && currentProfile?.is_admin === true;
@@ -65,6 +70,72 @@ export default function App() {
   function reportError(cause, fallback) {
     console.error(cause);
     setError(errorMessage(cause, fallback));
+  }
+
+  function clearSessionExpiry() {
+    if (sessionExpiryTimerRef.current !== null) {
+      window.clearTimeout(sessionExpiryTimerRef.current);
+      sessionExpiryTimerRef.current = null;
+    }
+    sessionExpiresAtRef.current = null;
+  }
+
+  function resetAuthenticatedState() {
+    clearSessionExpiry();
+    setSignedInUser(null);
+    setCurrentProfile(null);
+    setReceptions([]);
+    setReceptionPage(0);
+    setReceptionPageSize(defaultPageSize);
+    setHasNextReceptionPage(false);
+    setReceptionFilters({ ...emptyReceptionFilters });
+    setPendingUsers([]);
+    setActiveInvitations([]);
+    setSelectedReception(null);
+    setAdminOpen(false);
+  }
+
+  async function expireSession(cause) {
+    if (sessionExpiryHandlingRef.current) return;
+    sessionExpiryHandlingRef.current = true;
+    if (cause) console.warn('The database session expired.', cause);
+
+    try {
+      clearSessionExpiry();
+      await db.close().catch(() => {});
+      window.google?.accounts?.id?.disableAutoSelect();
+      resetAuthenticatedState();
+      setStatus({ state: 'offline', text: 'Session expired' });
+      setError('Your session expired. Sign in again to continue.');
+    } finally {
+      sessionExpiryHandlingRef.current = false;
+    }
+  }
+
+  function scheduleSessionExpiry(token) {
+    clearSessionExpiry();
+    const expiresAt = jwtExpirationTime(token);
+    if (expiresAt === null) return;
+
+    sessionExpiresAtRef.current = expiresAt;
+    const delay = Math.max(0, expiresAt - Date.now());
+    sessionExpiryTimerRef.current = window.setTimeout(() => void expireSession(), delay);
+  }
+
+  function requireActiveSession() {
+    const expiresAt = sessionExpiresAtRef.current;
+    if (expiresAt === null || Date.now() < expiresAt) return true;
+
+    void expireSession();
+    return false;
+  }
+
+  async function handleDatabaseError(cause, fallback) {
+    if (isSessionAuthenticationError(cause)) {
+      await expireSession(cause);
+      return;
+    }
+    reportError(cause, fallback);
   }
 
   async function loadCurrentProfile() {
@@ -81,6 +152,7 @@ export default function App() {
     targetPageSize = receptionPageSize,
     targetFilters = receptionFilters,
   ) {
+    if (!requireActiveSession()) return false;
     clearError();
     setReceptionsRefreshing(true);
 
@@ -99,7 +171,7 @@ export default function App() {
       setHasNextReceptionPage(pageWithLookahead.length > targetPageSize);
       return true;
     } catch (cause) {
-      reportError(cause, 'Could not load gateway receptions.');
+      await handleDatabaseError(cause, 'Could not load gateway receptions.');
       return false;
     } finally {
       setReceptionsRefreshing(false);
@@ -108,6 +180,7 @@ export default function App() {
 
   async function loadAdminData() {
     if (!currentProfile?.is_admin) return false;
+    if (!requireActiveSession()) return false;
 
     clearError();
     setAdminRefreshing(true);
@@ -125,7 +198,7 @@ export default function App() {
       setActiveInvitations(nextActiveInvitations);
       return true;
     } catch (cause) {
-      reportError(cause, 'Could not load administrator data.');
+      await handleDatabaseError(cause, 'Could not load administrator data.');
       return false;
     } finally {
       setAdminRefreshing(false);
@@ -158,6 +231,7 @@ export default function App() {
       await db.authenticate(result.token);
 
       const profile = await loadCurrentProfile();
+      scheduleSessionExpiry(result.token);
       setSignedInUser(result.user || null);
       setCurrentProfile(profile);
       setInvitationToken(null);
@@ -174,6 +248,7 @@ export default function App() {
         });
       }
     } catch (cause) {
+      clearSessionExpiry();
       setStatus({ state: 'offline', text: 'Sign-in failed' });
       reportError(cause, 'Could not sign in.');
       await db.close().catch(() => {});
@@ -225,11 +300,13 @@ export default function App() {
 
     return () => {
       cancelled = true;
+      clearSessionExpiry();
       window.removeEventListener('pagehide', closeConnection);
     };
   }, []);
 
   async function checkApproval() {
+    if (!requireActiveSession()) return;
     clearError();
     setApprovalBusy(true);
 
@@ -246,7 +323,7 @@ export default function App() {
         setStatus({ state: 'pending', text: 'Still awaiting approval' });
       }
     } catch (cause) {
-      reportError(cause, 'Could not check approval.');
+      await handleDatabaseError(cause, 'Could not check approval.');
     } finally {
       setApprovalBusy(false);
     }
@@ -263,17 +340,7 @@ export default function App() {
       reportError(cause, 'The connection could not be closed cleanly.');
     } finally {
       window.google?.accounts?.id?.disableAutoSelect();
-      setSignedInUser(null);
-      setCurrentProfile(null);
-      setReceptions([]);
-      setReceptionPage(0);
-      setReceptionPageSize(defaultPageSize);
-      setHasNextReceptionPage(false);
-      setReceptionFilters({ ...emptyReceptionFilters });
-      setPendingUsers([]);
-      setActiveInvitations([]);
-      setSelectedReception(null);
-      setAdminOpen(false);
+      resetAuthenticatedState();
       setLogoutBusy(false);
       setStatus({ state: 'offline', text: 'Signed out' });
     }
@@ -286,26 +353,29 @@ export default function App() {
   }
 
   async function approveUser(user) {
+    if (!requireActiveSession()) return;
     clearError();
     try {
       await db.update(user.id).merge({ approved: true, approved_at: new Date() });
       await loadAdminData();
     } catch (cause) {
-      reportError(cause, 'Could not approve the user.');
+      await handleDatabaseError(cause, 'Could not approve the user.');
     }
   }
 
   async function revokeInvitation(invitation) {
+    if (!requireActiveSession()) return;
     clearError();
     try {
       await db.update(invitation.id).merge({ status: 'revoked' });
       await loadAdminData();
     } catch (cause) {
-      reportError(cause, 'Could not revoke the invitation.');
+      await handleDatabaseError(cause, 'Could not revoke the invitation.');
     }
   }
 
   async function createInvitation(email, days) {
+    if (!requireActiveSession()) return null;
     clearError();
     try {
       const invitation = generateInvitationToken();
@@ -326,7 +396,7 @@ export default function App() {
       await loadAdminData();
       return buildInvitationLink(invitation);
     } catch (cause) {
-      reportError(cause, 'Could not create the invitation.');
+      await handleDatabaseError(cause, 'Could not create the invitation.');
       return null;
     }
   }
