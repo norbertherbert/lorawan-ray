@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Surreal, Table } from 'surrealdb';
 import AdminPanel from './components/AdminPanel.jsx';
 import JsonDialog from './components/JsonDialog.jsx';
@@ -14,6 +15,11 @@ import {
   loadGoogleIdentityScript,
 } from './lib.js';
 import { buildReceptionPageQuery, emptyReceptionFilters } from './receptions.js';
+import { mockUplinkDataSource } from './api/mockUplinks.ts';
+import { SurrealUplinkDataSource } from './api/surrealUplinks.ts';
+import Analyzer from './pages/Analyzer.tsx';
+
+const useMockData = import.meta.env.VITE_USE_MOCK_DATA === 'true';
 
 const config = {
   endpoint:
@@ -23,14 +29,19 @@ const config = {
   database: import.meta.env.VITE_SURREAL_DATABASE || 'sniffer',
   googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
   authBrokerUrl: (import.meta.env.VITE_AUTH_BROKER_URL || '').replace(/\/$/, ''),
+  uplinkSource: useMockData ? 'mock' : 'surreal',
 };
 
 const db = new Surreal();
+const surrealUplinkDataSource = new SurrealUplinkDataSource(db);
+const analyzerDataSource = config.uplinkSource === 'surreal' ? surrealUplinkDataSource : mockUplinkDataSource;
+const defaultViewerMode = config.uplinkSource === 'surreal' ? 'analyzer' : 'legacy';
 const invitations = new Table('invitation');
 const initialInvitation = consumeInvitationFragment();
 const defaultPageSize = 25;
 
 export default function App() {
+  const queryClient = useQueryClient();
   const [status, setStatus] = useState({ state: 'offline', text: 'Not connected' });
   const [error, setError] = useState(
     initialInvitation.invalid
@@ -49,6 +60,7 @@ export default function App() {
   const [activeInvitations, setActiveInvitations] = useState([]);
   const [selectedReception, setSelectedReception] = useState(null);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [viewerMode, setViewerMode] = useState(defaultViewerMode);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [approvalBusy, setApprovalBusy] = useState(false);
   const [receptionsRefreshing, setReceptionsRefreshing] = useState(false);
@@ -81,6 +93,8 @@ export default function App() {
   }
 
   function resetAuthenticatedState() {
+    queryClient.removeQueries({ queryKey: ['uplinks'] });
+    queryClient.removeQueries({ queryKey: ['uplink'] });
     clearSessionExpiry();
     setSignedInUser(null);
     setCurrentProfile(null);
@@ -93,6 +107,7 @@ export default function App() {
     setActiveInvitations([]);
     setSelectedReception(null);
     setAdminOpen(false);
+    setViewerMode(defaultViewerMode);
   }
 
   async function expireSession(cause) {
@@ -240,7 +255,7 @@ export default function App() {
       const name = profile.name || result.user?.name;
       if (profile.approved) {
         setStatus({ state: 'online', text: name ? `Signed in · ${name}` : 'Signed in' });
-        await loadReceptions();
+        if (config.uplinkSource !== 'surreal') await loadReceptions();
       } else {
         setStatus({
           state: 'pending',
@@ -318,7 +333,7 @@ export default function App() {
           state: 'online',
           text: profile.name ? `Signed in · ${profile.name}` : 'Signed in',
         });
-        await loadReceptions();
+        if (config.uplinkSource !== 'surreal') await loadReceptions();
       } else {
         setStatus({ state: 'pending', text: 'Still awaiting approval' });
       }
@@ -415,6 +430,18 @@ export default function App() {
               <span>{status.text}</span>
             </div>
             <button
+              className="view-toggle-button"
+              type="button"
+              aria-pressed={viewerMode === 'analyzer'}
+              onClick={() => {
+                setAdminOpen(false);
+                setViewerMode((current) => current === 'legacy' ? 'analyzer' : 'legacy');
+              }}
+              hidden={!approved || config.uplinkSource === 'surreal'}
+            >
+              {viewerMode === 'legacy' ? 'Packet analyzer' : 'Legacy viewer'}
+            </button>
+            <button
               className="admin-toggle-button"
               type="button"
               aria-controls="admin-card"
@@ -485,7 +512,7 @@ export default function App() {
           </button>
         </section>
 
-        {approved && !adminOpen ? (
+        {approved && !adminOpen && viewerMode === 'legacy' ? (
           <ReceptionTable
             receptions={receptions}
             refreshing={receptionsRefreshing}
@@ -502,6 +529,15 @@ export default function App() {
             onPageSizeChange={(pageSize) => loadReceptions(0, pageSize, receptionFilters)}
             onFiltersChange={(filters) => loadReceptions(0, receptionPageSize, filters)}
             onSelect={setSelectedReception}
+          />
+        ) : null}
+
+        {approved && !adminOpen && viewerMode === 'analyzer' ? (
+          <Analyzer
+            dataSource={analyzerDataSource}
+            sourceKey={`${config.uplinkSource}-v1`}
+            sourceLabel={config.uplinkSource === 'surreal' ? 'SurrealDB · normalized' : 'Mock data'}
+            onDatabaseError={handleDatabaseError}
           />
         ) : null}
 

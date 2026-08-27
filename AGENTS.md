@@ -21,8 +21,8 @@ changing its code or the gateway database contract, read
 - `surreal/schema.surql` owns the `user` and `invitation` tables and the
   `google` record-access method.
 - `../lorawan-sniffer/init_db.surql` is authoritative for
-  `gateway_credential`, `gateway_writer`, `gateway_rxpk`, `gateway_stat`, and
-  their permissions.
+  `gateway_credential`, `gateway_writer`, `gateway_reception`,
+  `lorawan_uplink`, `gateway_stat`, and their permissions.
 
 Do not redefine or overwrite gateway-owned tables or permissions here. If the
 viewer needs a new stored field or permission, coordinate the change with the
@@ -32,9 +32,13 @@ ingestion repository and keep one authoritative definition.
 
 - Namespace: `lorawan`
 - Database: `sniffer`
-- The main data source is `gateway_rxpk`.
-- The reception table summarizes selected `gateway`, `lorawan`, and `rxpk` fields, while its JSON
-  dialog exposes the complete selected record except for the internal record ID.
+- The current viewer still reads the legacy `gateway_rxpk` table until the
+  coordinated schema/API cutover. The normalized target data source is
+  `lorawan_uplink`, with linked `gateway_reception` records.
+- The legacy reception table summarizes selected `gateway`, `lorawan`, and
+  `rxpk` fields. In the normalized target contract, reception identity and
+  timestamps are top-level fields, with raw packet-forwarder data under
+  `raw_rxpk`.
 - The browser remains read-only for gateway receptions. SurrealDB permissions,
   rather than UI controls alone, must enforce this.
 - Only approved Google record users may select receptions.

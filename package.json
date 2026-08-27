@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc -b",
     "test": "node --test",
     "preview": "vite preview",
     "worker:login": "wrangler login",
@@ -15,14 +16,27 @@
     "worker:check": "wrangler deploy --dry-run --outdir /tmp/sdbexample-worker --config worker/wrangler.toml"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.102.6",
+    "@tanstack/react-table": "^9.2.3",
+    "flowbite-react": "^0.12.17",
     "jose": "^6.2.9",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "surrealdb": "^2.0.8"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
     "@vitejs/plugin-react": "^5.2.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
     "vite": "^7.1.2",
     "wrangler": "^4.123.0"
+  },
+  "overrides": {
+    "flowbite-react": {
+      "deepmerge-ts": "8.0.0"
+    }
   }
 }

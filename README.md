@@ -1,6 +1,6 @@
 # LoRaWAN Sniffer: Google Sign-In + SurrealDB Cloud
 
-A React-based, read-only viewer for the latest `gateway_rxpk` records, with administrator approval
+A React-based, read-only viewer for LoRaWAN packets, with administrator approval
 and single-use invitations. Vite builds the static app for GitHub Pages, while a small Cloudflare
 Worker verifies Google ID tokens and exchanges them for 15-minute SurrealDB record-user tokens.
 
@@ -15,6 +15,17 @@ GitHub Pages ── Google ID token ──▶ Auth Worker
 The Worker is necessary because Google ID tokens cannot contain SurrealDB's required `ns`, `db`,
 and `ac` claims. It never receives a SurrealDB system-user password and is not involved in normal
 reception queries.
+
+The deployed viewer currently continues to read the legacy `gateway_rxpk` table. The normalized
+analyzer data source under `src/api/` reads `lorawan_uplink` and its linked `gateway_reception`
+records directly from SurrealDB using the same authenticated browser connection. Its structured
+filters, whitelisted sorting, and opaque keyset cursors are evaluated server-side. This path will
+replace the legacy table only during the coordinated database/UI cutover.
+
+The Analyzer treats modulation as a first-class radio property. Its dense table shows modulation
+and the packet-forwarder data-rate identifier, including LR-FHSS values such as `M0CW137`. LoRa
+spreading factor is shown only in LoRa-specific details. LR-FHSS details retain hopping-channel
+width and per-signal drift, offset, and RSSI-deviation measurements.
 
 ## Prerequisites
 
@@ -38,7 +49,8 @@ This exact value is shared only between the Worker and SurrealDB. Never put it i
 
 Open [surreal/schema.surql](surreal/schema.surql) and make a temporary, untracked copy. In that copy:
 
-1. Initialize the listener schema in `NS lorawan DB sniffer` first so `gateway_rxpk` exists.
+1. Initialize the listener schema in `NS lorawan DB sniffer` first so
+   `gateway_reception` and `lorawan_uplink` exist.
 2. Replace `__SURREAL_JWT_SECRET__` with the secret from step 1.
 3. Replace `__TOKEN_ISSUER__` with `tiny-tasks-auth`.
 4. Replace `__TOKEN_AUDIENCE__` with `tiny-tasks-surrealdb`.
@@ -47,9 +59,9 @@ Open [surreal/schema.surql](surreal/schema.surql) and make a temporary, untracke
    approved and designated as administrator on first sign-in.
 
 The schema creates deterministic `user:google_<google-sub>` records at first login. The listener's
-`init_db.surql` owns the `gateway_rxpk` permissions: approved Google users may select receptions,
-while gateway-specific creation is preserved and browser users cannot create, update, or delete
-receptions.
+`init_db.surql` owns normalized packet-table permissions: approved Google users may select logical
+uplinks and receptions, while gateway-specific creation is preserved and browser users cannot
+create, update, or delete packet records.
 
 ## Registration and invitations
 
@@ -110,6 +122,15 @@ npm run dev
 
 In `.env.local`, set the Google client ID and use `http://localhost:8787` for
 `VITE_AUTH_BROKER_URL` while the Worker is running locally.
+
+Development and production builds use the normalized `lorawan_uplink` and
+`gateway_reception` tables by default, so neither `npm run dev` nor
+`npm run build` requires a data-source setting. To work with the
+bundled normalized mock packets instead, start Vite with:
+
+```bash
+VITE_USE_MOCK_DATA=true npm run dev
+```
 
 All `VITE_*` values are public by design. They must never contain the signing secret, a database
 password, or an OAuth client secret.
