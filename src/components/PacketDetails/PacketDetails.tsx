@@ -13,8 +13,7 @@ export default function PacketDetails({ packet, loading, error }: PacketDetailsP
     <section className="packet-details" aria-live="polite">
       <div className="packet-details-heading">
         <div>
-          <p className="section-label">Packet details</p>
-          <h3>{packet ? `${packet.mType} · ${packet.devAddr ?? packet.devEui ?? packet.id}` : 'Select a packet'}</h3>
+          <h3>Packet details</h3>
         </div>
         {packet ? <Badge color="gray">{packet.receptionCount} gateway reception{packet.receptionCount === 1 ? '' : 's'}</Badge> : null}
       </div>
@@ -66,7 +65,7 @@ export default function PacketDetails({ packet, loading, error }: PacketDetailsP
               <div><dt>Data rate</dt><dd>{packet.dataRate ?? '—'}</dd></div>
               <div><dt>Coding rate</dt><dd>{packet.codingRate ?? '—'}</dd></div>
               {packet.modulation === 'LORA' ? <div><dt>Spreading factor</dt><dd>{packet.spreadingFactor ? `SF${packet.spreadingFactor}` : '—'}</dd></div> : null}
-              {packet.modulation === 'LR-FHSS' ? <div><dt>Hopping width</dt><dd>{packet.hoppingChannelWidth ?? '—'}</dd></div> : null}
+              {packet.modulation === 'LR-FHSS' ? <div><dt>LR-FHSS hopping channel width</dt><dd>{packet.hoppingChannelWidth ?? '—'}</dd></div> : null}
               <div><dt>Frequency</dt><dd>{packet.frequencyMHz === null ? '—' : `${packet.frequencyMHz.toFixed(3)} MHz`}</dd></div>
             </dl>
             <h4>PHY payload</h4>
@@ -75,17 +74,30 @@ export default function PacketDetails({ packet, loading, error }: PacketDetailsP
             <div className="gateway-reception-list">
               {packet.receptions.map((reception) => (
                 <article key={reception.id}>
-                  <strong>{reception.gatewayId}</strong>
-                  <span>{formatDate(reception.receivedAt ?? reception.ingestedAt)}</span>
-                  <span>{reception.modulation ?? '—'} · {reception.dataRate ?? '—'} · {reception.bestRssiDbm ?? '—'} dBm · {reception.bestSnrDb ?? '—'} dB</span>
-                  {reception.modulation === 'LR-FHSS' ? (
-                    <span className="lr-fhss-diagnostics">
-                      HPW {reception.hoppingChannelWidth ?? '—'}
-                      {reception.signals.map((signal, index) => (
-                        <span key={index}> · signal {index + 1}: drift {signal.frequencyDriftHz ?? '—'} Hz, offset {signal.frequencyOffsetHz ?? '—'} Hz, RSSI σ {signal.rssiStandardDeviationDb ?? '—'} dB</span>
-                      ))}
-                    </span>
-                  ) : null}
+                  <header className="gateway-reception-heading">
+                    <div>
+                      <span>Gateway</span>
+                      <strong>{reception.gatewayId}</strong>
+                    </div>
+                    <div>
+                      <span>Received</span>
+                      <time>{formatDate(reception.receivedAt ?? reception.ingestedAt)}</time>
+                    </div>
+                  </header>
+                  <dl className="gateway-reception-metrics">
+                    <div><dt>Modulation</dt><dd>{reception.modulation ?? '—'}</dd></div>
+                    <div><dt>Data rate</dt><dd>{reception.dataRate ?? '—'}</dd></div>
+                    <div><dt>RSSI</dt><dd>{reception.bestRssiDbm ?? '—'} dBm</dd></div>
+                    <div><dt>SNR</dt><dd>{reception.bestSnrDb ?? '—'} dB</dd></div>
+                    {reception.modulation === 'LR-FHSS' ? reception.signals.flatMap((signal, index) => {
+                      const source = signal.antenna === null ? `signal ${index + 1}` : `antenna ${signal.antenna}`;
+                      return [
+                        <div key={`signal-${index}-drift`}><dt>LR-FHSS {source} freq. drift</dt><dd>{signal.frequencyDriftHz ?? '—'} Hz</dd></div>,
+                        <div key={`signal-${index}-offset`}><dt>LR-FHSS {source} freq. offset</dt><dd>{signal.frequencyOffsetHz ?? '—'} Hz</dd></div>,
+                        <div key={`signal-${index}-rssi-deviation`}><dt>LR-FHSS {source} RSSI deviation</dt><dd>{signal.rssiStandardDeviationDb ?? '—'} dB</dd></div>,
+                      ];
+                    }) : null}
+                  </dl>
                 </article>
               ))}
             </div>

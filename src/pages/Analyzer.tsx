@@ -1,4 +1,3 @@
-import { Button } from 'flowbite-react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { functionalUpdate, type RowSelectionState, type SortingState } from '@tanstack/react-table';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -6,9 +5,9 @@ import type { UplinkDataSource, UplinkFilters, UplinkPageRequest, UplinkSort } f
 import FilterBuilder, { emptyFilterDraft, type FilterDraft } from '../components/FilterBuilder/FilterBuilder.tsx';
 import PacketDetails from '../components/PacketDetails/PacketDetails.tsx';
 import PacketTable from '../components/PacketTable/PacketTable.tsx';
-import { RefreshIcon } from '../components/Icons.jsx';
+import { DownArrowIcon, RefreshIcon, UpArrowIcon } from '../components/Icons.jsx';
 
-const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 
 interface AnalyzerProps {
   dataSource: UplinkDataSource;
@@ -20,7 +19,7 @@ interface AnalyzerProps {
 
 export default function Analyzer({ dataSource, sourceKey, sourceLabel, requireActiveSession, onDatabaseError }: AnalyzerProps) {
   const [page, setPage] = useState(0);
-  const [pageRequest, setPageRequest] = useState<UplinkPageRequest>({ limit: 25 });
+  const [pageRequest, setPageRequest] = useState<UplinkPageRequest>({ limit: 10 });
   const [sorting, setSorting] = useState<SortingState>([{ id: 'observedAt', desc: true }]);
   const [filterDraft, setFilterDraft] = useState<FilterDraft>(emptyFilterDraft);
   const [filters, setFilters] = useState<UplinkFilters | undefined>();
@@ -100,7 +99,6 @@ export default function Analyzer({ dataSource, sourceKey, sourceLabel, requireAc
     <section className="card analyzer-card" id="analyzer-card">
       <div className="analyzer-heading">
         <div>
-          <p className="section-label">lorawan_uplink</p>
           <h2>Packet analyzer</h2>
         </div>
         {sourceLabel ? <span className="analyzer-source is-mock">{sourceLabel}</span> : null}
@@ -118,11 +116,30 @@ export default function Analyzer({ dataSource, sourceKey, sourceLabel, requireAc
           >
             {PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size}</option>)}
           </select>
+          <span className="analyzer-result-count">{packets.data?.items.length ?? 0} packets</span>
         </label>
         <div>
-          <Button color="alternative" size="xs" onClick={goLater} disabled={packets.isFetching || !packets.data?.pageInfo.hasPreviousPage}>Later</Button>
-          <span>Page {page + 1}</span>
-          <Button color="alternative" size="xs" onClick={goEarlier} disabled={packets.isFetching || !packets.data?.pageInfo.hasNextPage}>Earlier</Button>
+          <button
+            className="pagination-icon-button"
+            type="button"
+            onClick={goLater}
+            disabled={packets.isFetching || !packets.data?.pageInfo.hasPreviousPage}
+            title="Later"
+            aria-label="Later"
+          >
+            <UpArrowIcon />
+          </button>
+          <span>Page {-page}</span>
+          <button
+            className="pagination-icon-button"
+            type="button"
+            onClick={goEarlier}
+            disabled={packets.isFetching || !packets.data?.pageInfo.hasNextPage}
+            title="Earlier"
+            aria-label="Earlier"
+          >
+            <DownArrowIcon />
+          </button>
         </div>
         <button className={`refresh-icon-button${packets.isFetching ? ' is-busy' : ''}`} type="button" onClick={refreshPackets} disabled={packets.isFetching} title="Refresh packets" aria-label="Refresh packets">
           <RefreshIcon />
@@ -130,16 +147,17 @@ export default function Analyzer({ dataSource, sourceKey, sourceLabel, requireAc
       </nav>
 
       {packets.error ? <p className="analyzer-query-error" role="alert">Could not load packets: {packets.error.message}</p> : null}
-      <div className="analyzer-result-count">{packets.data?.items.length ?? 0} packets on this page</div>
-      <PacketTable
-        data={packets.data?.items ?? []}
-        sorting={sorting}
-        rowSelection={rowSelection}
-        loading={packets.isFetching}
-        onSortingChange={changeSorting}
-        onRowSelectionChange={(updater) => setRowSelection((current) => functionalUpdate(updater, current))}
-      />
-      <PacketDetails packet={details.data} loading={details.isFetching} error={details.error} />
+      <div className="analyzer-workspace">
+        <PacketTable
+          data={packets.data?.items ?? []}
+          sorting={sorting}
+          rowSelection={rowSelection}
+          loading={packets.isFetching}
+          onSortingChange={changeSorting}
+          onRowSelectionChange={(updater) => setRowSelection((current) => functionalUpdate(updater, current))}
+        />
+        <PacketDetails packet={details.data} loading={details.isFetching} error={details.error} />
+      </div>
     </section>
   );
 }

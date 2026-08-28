@@ -377,10 +377,9 @@ export default function App() {
 
   return (
     <>
-      <main className="shell">
+      <main className={`shell${approved && !adminOpen ? ' analyzer-shell' : ''}`}>
         <header className="hero">
           <div>
-            <p className="eyebrow">SurrealDB Cloud</p>
             <h1>LoRaWAN Ray</h1>
           </div>
           <div className="session-actions">
@@ -413,7 +412,6 @@ export default function App() {
         <section className="card connection-card" hidden={Boolean(currentProfile)}>
           <div className="section-heading">
             <div>
-              <p className="section-label">Connection</p>
               <h2>Sign in to the demo</h2>
             </div>
           </div>
@@ -438,7 +436,6 @@ export default function App() {
         <section className="card pending-card" hidden={!currentProfile || approved}>
           <div className="section-heading">
             <div>
-              <p className="section-label">Registration</p>
               <h2>Awaiting approval</h2>
             </div>
             <span className="number">02</span>

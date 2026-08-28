@@ -7,7 +7,6 @@ import {
   type RowSelectionState,
   type SortingState,
 } from '@tanstack/react-table';
-import { useLayoutEffect, useRef, useState } from 'react';
 import type { UplinkSummary } from '../../api/types.ts';
 import { formatDate } from '../../lib.js';
 
@@ -29,8 +28,7 @@ const columns = columnHelper.columns([
   }),
   columnHelper.accessor('dataRate', { header: 'Data rate', cell: nullableCell }),
   columnHelper.accessor('frequencyMHz', { header: 'Frequency', cell: ({ getValue }) => getValue() === null ? '—' : `${getValue()?.toFixed(3)} MHz` }),
-  columnHelper.accessor('bestGatewayId', { header: 'Gateway', cell: nullableCell }),
-  columnHelper.accessor('phyPayloadHex', { header: 'PHY payload', cell: ({ getValue }) => <span className="packet-hex">{getValue()}</span> }),
+  columnHelper.accessor('bestGatewayId', { header: 'Best gateway', cell: nullableCell }),
 ]);
 
 interface PacketTableProps {
@@ -50,11 +48,6 @@ export default function PacketTable({
   onSortingChange,
   onRowSelectionChange,
 }: PacketTableProps) {
-  const topScrollRef = useRef<HTMLDivElement>(null);
-  const topSpacerRef = useRef<HTMLDivElement>(null);
-  const tableWrapRef = useRef<HTMLDivElement>(null);
-  const tableRef = useRef<HTMLTableElement>(null);
-  const [overflows, setOverflows] = useState(false);
   const table = useTable({
     features,
     columns,
@@ -71,44 +64,14 @@ export default function PacketTable({
     onRowSelectionChange,
   });
 
-  useLayoutEffect(() => {
-    const topScroll = topScrollRef.current;
-    const spacer = topSpacerRef.current;
-    const tableWrap = tableWrapRef.current;
-    const element = tableRef.current;
-    if (!topScroll || !spacer || !tableWrap || !element) return undefined;
-    const update = () => {
-      spacer.style.width = `${element.scrollWidth}px`;
-      setOverflows(element.scrollWidth > tableWrap.clientWidth + 1);
-      topScroll.scrollLeft = tableWrap.scrollLeft;
-    };
-    update();
-    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(update) : null;
-    observer?.observe(element);
-    observer?.observe(tableWrap);
-    window.addEventListener('resize', update);
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener('resize', update);
-    };
-  }, [data]);
-
-  function sync(source: HTMLDivElement, target: React.RefObject<HTMLDivElement | null>) {
-    if (target.current && target.current.scrollLeft !== source.scrollLeft) target.current.scrollLeft = source.scrollLeft;
-  }
-
   return (
     <div className={`packet-grid${loading ? ' is-loading' : ''}`}>
       <div
-        ref={topScrollRef}
-        className="packet-grid-top-scroll"
-        hidden={!overflows || data.length === 0}
-        onScroll={(event) => sync(event.currentTarget, tableWrapRef)}
+        className="packet-grid-scroll"
+        tabIndex={0}
+        aria-label="Scrollable packet table"
       >
-        <div ref={topSpacerRef} />
-      </div>
-      <div ref={tableWrapRef} className="packet-grid-scroll" onScroll={(event) => sync(event.currentTarget, topScrollRef)}>
-        <table ref={tableRef} aria-label="LoRaWAN uplink packets">
+        <table aria-label="LoRaWAN uplink packets">
           <thead>
             {table.getHeaderGroups().map((group) => (
               <tr key={group.id}>

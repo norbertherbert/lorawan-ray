@@ -9,6 +9,24 @@ export function RefreshIcon() {
   );
 }
 
+export function UpArrowIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M12 19V5" />
+      <path d="m6 11 6-6 6 6" />
+    </svg>
+  );
+}
+
+export function DownArrowIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M12 5v14" />
+      <path d="m18 13-6 6-6-6" />
+    </svg>
+  );
+}
+
 export function RefreshButton({ busy, label, onClick }) {
   const accessibleLabel = busy ? `Refreshing ${label}…` : `Refresh ${label}`;
 

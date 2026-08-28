@@ -61,7 +61,6 @@ export default function AdminPanel({
     <section className="card admin-card" id="admin-card">
       <div className="section-heading">
         <div>
-          <p className="section-label">Administration</p>
           <h2>Users &amp; invitations</h2>
         </div>
       </div>
