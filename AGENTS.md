@@ -6,9 +6,9 @@ This repository contains `lorawan-ray-webui`, the browser-based, read-only GUI f
 gateway receptions, its Cloudflare authentication Worker, and the SurrealDB
 schema for Google-authenticated users and invitations.
 
-The ingestion service is in the sibling repository `../lorawan-sniffer`. Before
+The ingestion service is in the sibling repository `../lorawan-ray-collector`. Before
 changing its code or the gateway database contract, read
-`../lorawan-sniffer/AGENTS.md` and preserve its independent Git history.
+`../lorawan-ray-collector/AGENTS.md` and preserve its independent Git history.
 
 ## Sources of truth
 
@@ -20,7 +20,7 @@ changing its code or the gateway database contract, read
 - `worker/test/` contains Worker unit tests.
 - `surreal/schema.surql` owns the `user` and `invitation` tables and the
   `google` record-access method.
-- `../lorawan-sniffer/init_db.surql` is authoritative for
+- `../lorawan-ray-collector/init_db.surql` is authoritative for
   `gateway_credential`, `gateway_writer`, `gateway_reception`,
   `lorawan_uplink`, `gateway_stat`, and their permissions.
 
@@ -31,7 +31,7 @@ ingestion repository and keep one authoritative definition.
 ## Application contract
 
 - Namespace: `lorawan`
-- Database: `sniffer`
+- Database: `ray`
 - The packet data source is `lorawan_uplink`, with linked
   `gateway_reception` records.
 - Reception identity and timestamps are top-level fields, with raw
@@ -79,5 +79,5 @@ requests the corresponding deployment or database operation.
 
 Run the tests and production build for application changes. Run
 `npm run worker:check` for Worker changes. For schema or gateway-record changes,
-also inspect `../lorawan-sniffer/init_db.surql` and validate the relevant Rust tests.
+also inspect `../lorawan-ray-collector/init_db.surql` and validate the relevant Rust tests.
 Report which checks were run and any checks that could not run.

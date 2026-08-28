@@ -1,6 +1,6 @@
 -- Run this as a database owner in Surrealist after replacing the four
 -- __PLACEHOLDER__ values. Never commit the resulting secret-bearing file.
-USE NS lorawan DB sniffer;
+USE NS lorawan DB ray;
 
 DEFINE TABLE OVERWRITE user SCHEMAFULL
   PERMISSIONS

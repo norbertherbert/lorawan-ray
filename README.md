@@ -50,7 +50,7 @@ This exact value is shared only between the Worker and SurrealDB. Never put it i
 
 Open [surreal/schema.surql](surreal/schema.surql) and make a temporary, untracked copy. In that copy:
 
-1. Initialize the listener schema in `NS lorawan DB sniffer` first so
+1. Initialize the collector schema in `NS lorawan DB ray` first so
    `gateway_reception` and `lorawan_uplink` exist.
 2. Replace `__SURREAL_JWT_SECRET__` with the secret from step 1.
 3. Replace `__TOKEN_ISSUER__` with `tiny-tasks-auth`.
@@ -92,7 +92,7 @@ OAuth origins contain only scheme, host, and port.
 Edit [worker/wrangler.toml](worker/wrangler.toml):
 
 - Set `GOOGLE_CLIENT_ID` to the Web client ID.
-- Keep namespace/database set to `lorawan/sniffer`.
+- Keep namespace/database set to `lorawan/ray`.
 - Replace the GitHub origin in `ALLOWED_ORIGINS`.
 - Keep issuer/audience synchronized with the SurrealQL script.
 

@@ -23,7 +23,7 @@ const config = {
     import.meta.env.VITE_SURREAL_ENDPOINT ||
     'wss://nano-things-fre-06fekk904lvvv6p0ocvu8dm7c4.aws-euw1.surreal.cloud',
   namespace: import.meta.env.VITE_SURREAL_NAMESPACE || 'lorawan',
-  database: import.meta.env.VITE_SURREAL_DATABASE || 'sniffer',
+  database: import.meta.env.VITE_SURREAL_DATABASE || 'ray',
   googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
   authBrokerUrl: (import.meta.env.VITE_AUTH_BROKER_URL || '').replace(/\/$/, ''),
   uplinkSource: useMockData ? 'mock' : 'surreal',

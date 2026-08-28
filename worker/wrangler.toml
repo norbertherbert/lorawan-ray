@@ -5,7 +5,7 @@ compatibility_date = "2026-08-18"
 [vars]
 GOOGLE_CLIENT_ID = "1011598554930-bkr0kuce43itfl75itlkp927ff21b5lt.apps.googleusercontent.com"
 SURREAL_NAMESPACE = "lorawan"
-SURREAL_DATABASE = "sniffer"
+SURREAL_DATABASE = "ray"
 SURREAL_ACCESS = "google"
 TOKEN_ISSUER = "tiny-tasks-auth"
 TOKEN_AUDIENCE = "tiny-tasks-surrealdb"

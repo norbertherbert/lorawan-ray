@@ -1,18 +1,18 @@
 # Normalized SurrealDB cutover
 
-This runbook intentionally separates preparation from the destructive database
-reset. Do not begin the **Cutover** section until every gateway binary,
+This runbook intentionally keeps the previous `sniffer` database available for
+rollback. Do not begin the **Cutover** section until every gateway binary,
 credential, and frontend deployment value is ready.
 
 ## Verified artifacts
 
 - ARM target: `armv7-unknown-linux-musleabihf`
-- Binary: `../lorawan-sniffer/target/armv7-unknown-linux-musleabihf/release/lorawan-ray-collector`
+- Binary: `../lorawan-ray-collector/target/armv7-unknown-linux-musleabihf/release/lorawan-ray-collector`
 - Format: static 32-bit ARM EABI5 executable, stripped
 - SHA-256: record the checksum after building the final collector
-- Ingestion schema: `../lorawan-sniffer/init_db.surql`
+- Ingestion schema: `../lorawan-ray-collector/init_db.surql`
 - Browser-authentication schema: `surreal/private_schema.surql` (ignored, secret-bearing)
-- Gateway credential template: `../lorawan-sniffer/create_gw.surql`
+- Gateway credential template: `../lorawan-ray-collector/create_gw.surql`
 
 The public ingestion and authentication schemas were applied together to an
 ephemeral SurrealDB 3.2.4 database. A synthetic LR-FHSS packet was then written
@@ -21,9 +21,9 @@ source.
 
 ## Preparation
 
-1. Ensure `surreal/private_schema.surql` still contains the deployed Worker's
-   signing key, issuer, audience, and administrator email. Never print or commit
-   this file.
+1. Ensure `surreal/private_schema.surql` selects `USE NS lorawan DB ray` and
+   still contains the deployed Worker's signing key, issuer, audience, and
+   administrator email. Never print or commit this file.
 2. Generate a new unique password for every gateway. The old password must not
    be reused.
 3. Prepare one private copy of `create_gw.surql` per gateway, replacing:
@@ -33,7 +33,7 @@ source.
 5. Upload the new binary without replacing the running binary:
 
    ```bash
-   scp ../lorawan-sniffer/target/armv7-unknown-linux-musleabihf/release/lorawan-ray-collector \
+   scp ../lorawan-ray-collector/target/armv7-unknown-linux-musleabihf/release/lorawan-ray-collector \
      root@GATEWAY_ADDRESS:/root/lorawan-ray-collector.new
    ```
 
@@ -54,7 +54,7 @@ source.
    export LISTEN_ADDR="127.0.0.1:1700"
    export SURREALDB_URL="https://INSTANCE.surreal.cloud"
    export SURREALDB_NAMESPACE="lorawan"
-   export SURREALDB_DATABASE="sniffer"
+   export SURREALDB_DATABASE="ray"
    export SURREALDB_ACCESS="gateway_writer"
    export SURREALDB_USERNAME="GATEWAY_ID_UPPERCASE"
    export SURREALDB_PASSWORD="NEW_GATEWAY_PASSWORD"
@@ -65,22 +65,25 @@ source.
 
 1. Stop every running collector and leave the packet forwarders pointed
    at their local UDP listener. Confirm no `lorawan-ray-collector` process remains.
-2. In Surrealist, connected as the database owner, reset only this database:
+2. In Surrealist, connected as the database owner, create and select the new database:
 
    ```surql
    USE NS lorawan;
-   REMOVE DATABASE sniffer;
-   DEFINE DATABASE sniffer;
-   USE DB sniffer;
+   DEFINE DATABASE ray;
+   USE DB ray;
    ```
 
-3. Apply `../lorawan-sniffer/init_db.surql` in full.
+3. Apply `../lorawan-ray-collector/init_db.surql` in full.
 4. Apply the ignored, secret-bearing `surreal/private_schema.surql` in full.
 5. Apply each prepared private gateway-credential query.
-6. Deploy the frontend. SurrealDB is the default packet source.
-7. Sign in as the configured administrator. The Packet Analyzer should open
+6. Deploy the existing authentication Worker so its `SURREAL_DATABASE=ray`
+   configuration takes effect. Its name, URL, issuer, audience, and signing key
+   remain unchanged.
+7. Set the GitHub Actions variable `VITE_SURREAL_DATABASE` to `ray`, then deploy
+   the frontend. SurrealDB is the default packet source.
+8. Sign in as the configured administrator. The Packet Analyzer should open
    directly and initially show an empty packet table.
-8. On each gateway, install the uploaded binary while retaining a rollback copy:
+9. On each gateway, install the uploaded binary while retaining a rollback copy:
 
    ```sh
    mv /root/lorawan-sniffer /root/lorawan-sniffer.previous
@@ -89,16 +92,17 @@ source.
    nohup /root/start.sh >/dev/null 2>&1 </dev/null &
    ```
 
-9. Send or receive one known LR-FHSS uplink and verify in the Analyzer:
+10. Send or receive one known LR-FHSS uplink and verify in the Analyzer:
    - Modulation is `LR-FHSS`.
    - Data rate has the expected `M…CW…` value.
    - Coding rate and hopping width are present.
    - Gateway reception details contain frequency drift and offset when reported.
-10. Verify pagination, modulation filtering, packet selection, and details loading.
+11. Verify pagination, modulation filtering, packet selection, and details loading.
 
 ## Rollback boundary
 
-The database reset cannot restore the old records. The user and invitation
-tables are recreated empty, and the configured administrator account is created
-again on first sign-in. The previous gateway executable remains recoverable as
+The previous `lorawan/sniffer` database remains unchanged during this cutover.
+The new `lorawan/ray` user and invitation tables initially start empty, and the
+configured administrator account is created again on first sign-in. The
+previous gateway executable remains recoverable as
 `/root/lorawan-sniffer.previous` until the renamed collector has been accepted.

@@ -1,7 +1,7 @@
 -- Commit-safe template for surreal/private_schema.surql.
 -- Replace every placeholder before applying this schema to SurrealDB.
 -- Keep the populated private_schema.surql file uncommitted.
-USE NS lorawan DB sniffer;
+USE NS lorawan DB ray;
 
 DEFINE TABLE OVERWRITE user SCHEMAFULL
   PERMISSIONS
