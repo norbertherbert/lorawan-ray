@@ -2,8 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Surreal, Table } from 'surrealdb';
 import AdminPanel from './components/AdminPanel.jsx';
-import JsonDialog from './components/JsonDialog.jsx';
-import ReceptionTable from './components/ReceptionTable.jsx';
 import {
   buildInvitationLink,
   consumeInvitationFragment,
@@ -14,7 +12,6 @@ import {
   jwtExpirationTime,
   loadGoogleIdentityScript,
 } from './lib.js';
-import { buildReceptionPageQuery, emptyReceptionFilters } from './receptions.js';
 import { mockUplinkDataSource } from './api/mockUplinks.ts';
 import { SurrealUplinkDataSource } from './api/surrealUplinks.ts';
 import Analyzer from './pages/Analyzer.tsx';
@@ -35,10 +32,8 @@ const config = {
 const db = new Surreal();
 const surrealUplinkDataSource = new SurrealUplinkDataSource(db);
 const analyzerDataSource = config.uplinkSource === 'surreal' ? surrealUplinkDataSource : mockUplinkDataSource;
-const defaultViewerMode = config.uplinkSource === 'surreal' ? 'analyzer' : 'legacy';
 const invitations = new Table('invitation');
 const initialInvitation = consumeInvitationFragment();
-const defaultPageSize = 25;
 
 export default function App() {
   const queryClient = useQueryClient();
@@ -51,19 +46,11 @@ export default function App() {
   const [invitationToken, setInvitationToken] = useState(initialInvitation.token);
   const [signedInUser, setSignedInUser] = useState(null);
   const [currentProfile, setCurrentProfile] = useState(null);
-  const [receptions, setReceptions] = useState([]);
-  const [receptionPage, setReceptionPage] = useState(0);
-  const [receptionPageSize, setReceptionPageSize] = useState(defaultPageSize);
-  const [hasNextReceptionPage, setHasNextReceptionPage] = useState(false);
-  const [receptionFilters, setReceptionFilters] = useState({ ...emptyReceptionFilters });
   const [pendingUsers, setPendingUsers] = useState([]);
   const [activeInvitations, setActiveInvitations] = useState([]);
-  const [selectedReception, setSelectedReception] = useState(null);
   const [adminOpen, setAdminOpen] = useState(false);
-  const [viewerMode, setViewerMode] = useState(defaultViewerMode);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [approvalBusy, setApprovalBusy] = useState(false);
-  const [receptionsRefreshing, setReceptionsRefreshing] = useState(false);
   const [adminRefreshing, setAdminRefreshing] = useState(false);
   const [logoutBusy, setLogoutBusy] = useState(false);
   const googleButtonRef = useRef(null);
@@ -98,16 +85,9 @@ export default function App() {
     clearSessionExpiry();
     setSignedInUser(null);
     setCurrentProfile(null);
-    setReceptions([]);
-    setReceptionPage(0);
-    setReceptionPageSize(defaultPageSize);
-    setHasNextReceptionPage(false);
-    setReceptionFilters({ ...emptyReceptionFilters });
     setPendingUsers([]);
     setActiveInvitations([]);
-    setSelectedReception(null);
     setAdminOpen(false);
-    setViewerMode(defaultViewerMode);
   }
 
   async function expireSession(cause) {
@@ -127,9 +107,12 @@ export default function App() {
     }
   }
 
-  function scheduleSessionExpiry(token) {
+  function scheduleSessionExpiry(token, advertisedExpiration) {
     clearSessionExpiry();
-    const expiresAt = jwtExpirationTime(token);
+    const advertisedExpiresAt = Date.parse(advertisedExpiration || '');
+    const expiresAt = Number.isFinite(advertisedExpiresAt)
+      ? advertisedExpiresAt
+      : jwtExpirationTime(token);
     if (expiresAt === null) return;
 
     sessionExpiresAtRef.current = expiresAt;
@@ -145,8 +128,17 @@ export default function App() {
     return false;
   }
 
+  function checkSessionExpiry() {
+    const expiresAt = sessionExpiresAtRef.current;
+    if (expiresAt !== null && Date.now() >= expiresAt) void expireSession();
+  }
+
   async function handleDatabaseError(cause, fallback) {
-    if (isSessionAuthenticationError(cause)) {
+    const expiresAt = sessionExpiresAtRef.current;
+    if (
+      (expiresAt !== null && Date.now() >= expiresAt) ||
+      isSessionAuthenticationError(cause)
+    ) {
       await expireSession(cause);
       return;
     }
@@ -160,37 +152,6 @@ export default function App() {
     const profile = profiles?.[0];
     if (!profile) throw new Error('Your user profile could not be loaded.');
     return profile;
-  }
-
-  async function loadReceptions(
-    targetPage = receptionPage,
-    targetPageSize = receptionPageSize,
-    targetFilters = receptionFilters,
-  ) {
-    if (!requireActiveSession()) return false;
-    clearError();
-    setReceptionsRefreshing(true);
-
-    try {
-      const query = buildReceptionPageQuery({
-        page: targetPage,
-        pageSize: targetPageSize,
-        filters: targetFilters,
-      });
-      const [pageWithLookahead] = await db.query(query.text, query.variables);
-
-      setReceptions(pageWithLookahead.slice(0, targetPageSize));
-      setReceptionPage(targetPage);
-      setReceptionPageSize(targetPageSize);
-      setReceptionFilters(targetFilters);
-      setHasNextReceptionPage(pageWithLookahead.length > targetPageSize);
-      return true;
-    } catch (cause) {
-      await handleDatabaseError(cause, 'Could not load gateway receptions.');
-      return false;
-    } finally {
-      setReceptionsRefreshing(false);
-    }
   }
 
   async function loadAdminData() {
@@ -246,7 +207,7 @@ export default function App() {
       await db.authenticate(result.token);
 
       const profile = await loadCurrentProfile();
-      scheduleSessionExpiry(result.token);
+      scheduleSessionExpiry(result.token, result.expiresAt);
       setSignedInUser(result.user || null);
       setCurrentProfile(profile);
       setInvitationToken(null);
@@ -255,7 +216,6 @@ export default function App() {
       const name = profile.name || result.user?.name;
       if (profile.approved) {
         setStatus({ state: 'online', text: name ? `Signed in · ${name}` : 'Signed in' });
-        if (config.uplinkSource !== 'surreal') await loadReceptions();
       } else {
         setStatus({
           state: 'pending',
@@ -312,11 +272,15 @@ export default function App() {
 
     const closeConnection = () => void db.close().catch(() => {});
     window.addEventListener('pagehide', closeConnection);
+    window.addEventListener('focus', checkSessionExpiry);
+    document.addEventListener('visibilitychange', checkSessionExpiry);
 
     return () => {
       cancelled = true;
       clearSessionExpiry();
       window.removeEventListener('pagehide', closeConnection);
+      window.removeEventListener('focus', checkSessionExpiry);
+      document.removeEventListener('visibilitychange', checkSessionExpiry);
     };
   }, []);
 
@@ -333,7 +297,6 @@ export default function App() {
           state: 'online',
           text: profile.name ? `Signed in · ${profile.name}` : 'Signed in',
         });
-        if (config.uplinkSource !== 'surreal') await loadReceptions();
       } else {
         setStatus({ state: 'pending', text: 'Still awaiting approval' });
       }
@@ -422,25 +385,13 @@ export default function App() {
         <header className="hero">
           <div>
             <p className="eyebrow">SurrealDB Cloud</p>
-            <h1>LoRaWAN Sniffer</h1>
+            <h1>LoRaWAN Ray</h1>
           </div>
           <div className="session-actions">
             <div className="status" data-state={status.state}>
               <span className="status-dot" aria-hidden="true" />
               <span>{status.text}</span>
             </div>
-            <button
-              className="view-toggle-button"
-              type="button"
-              aria-pressed={viewerMode === 'analyzer'}
-              onClick={() => {
-                setAdminOpen(false);
-                setViewerMode((current) => current === 'legacy' ? 'analyzer' : 'legacy');
-              }}
-              hidden={!approved || config.uplinkSource === 'surreal'}
-            >
-              {viewerMode === 'legacy' ? 'Packet analyzer' : 'Legacy viewer'}
-            </button>
             <button
               className="admin-toggle-button"
               type="button"
@@ -469,7 +420,6 @@ export default function App() {
               <p className="section-label">Connection</p>
               <h2>Sign in to the demo</h2>
             </div>
-            <span className="number">01</span>
           </div>
 
           <div className="google-signin">
@@ -512,31 +462,12 @@ export default function App() {
           </button>
         </section>
 
-        {approved && !adminOpen && viewerMode === 'legacy' ? (
-          <ReceptionTable
-            receptions={receptions}
-            refreshing={receptionsRefreshing}
-            page={receptionPage}
-            pageSize={receptionPageSize}
-            hasNextPage={hasNextReceptionPage}
-            filters={receptionFilters}
-            onRefresh={() =>
-              loadReceptions(receptionPage, receptionPageSize, receptionFilters)
-            }
-            onPageChange={(page) =>
-              loadReceptions(page, receptionPageSize, receptionFilters)
-            }
-            onPageSizeChange={(pageSize) => loadReceptions(0, pageSize, receptionFilters)}
-            onFiltersChange={(filters) => loadReceptions(0, receptionPageSize, filters)}
-            onSelect={setSelectedReception}
-          />
-        ) : null}
-
-        {approved && !adminOpen && viewerMode === 'analyzer' ? (
+        {approved && !adminOpen ? (
           <Analyzer
             dataSource={analyzerDataSource}
             sourceKey={`${config.uplinkSource}-v1`}
-            sourceLabel={config.uplinkSource === 'surreal' ? 'SurrealDB · normalized' : 'Mock data'}
+            sourceLabel={config.uplinkSource === 'mock' ? 'Mock data' : undefined}
+            requireActiveSession={requireActiveSession}
             onDatabaseError={handleDatabaseError}
           />
         ) : null}
@@ -559,7 +490,6 @@ export default function App() {
         </p>
       </main>
 
-      <JsonDialog reception={selectedReception} onClose={() => setSelectedReception(null)} />
     </>
   );
 }

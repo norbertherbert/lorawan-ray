@@ -7,9 +7,9 @@ credential, and frontend deployment value is ready.
 ## Verified artifacts
 
 - ARM target: `armv7-unknown-linux-musleabihf`
-- Binary: `../lorawan-sniffer/target/armv7-unknown-linux-musleabihf/release/lorawan-sniffer`
+- Binary: `../lorawan-sniffer/target/armv7-unknown-linux-musleabihf/release/lorawan-ray-collector`
 - Format: static 32-bit ARM EABI5 executable, stripped
-- SHA-256: `da9553914bb0815ae8d04fa1e6b2875de5d2fb9829c3a1b78c081deddb7b3bbf`
+- SHA-256: record the checksum after building the final collector
 - Ingestion schema: `../lorawan-sniffer/init_db.surql`
 - Browser-authentication schema: `surreal/private_schema.surql` (ignored, secret-bearing)
 - Gateway credential template: `../lorawan-sniffer/create_gw.surql`
@@ -33,15 +33,15 @@ source.
 5. Upload the new binary without replacing the running binary:
 
    ```bash
-   scp ../lorawan-sniffer/target/armv7-unknown-linux-musleabihf/release/lorawan-sniffer \
-     root@GATEWAY_ADDRESS:/root/lorawan-sniffer.new
+   scp ../lorawan-sniffer/target/armv7-unknown-linux-musleabihf/release/lorawan-ray-collector \
+     root@GATEWAY_ADDRESS:/root/lorawan-ray-collector.new
    ```
 
 6. On the gateway, verify and protect it:
 
    ```sh
-   sha256sum /root/lorawan-sniffer.new
-   chmod 700 /root/lorawan-sniffer.new
+   sha256sum /root/lorawan-ray-collector.new
+   chmod 700 /root/lorawan-ray-collector.new
    ```
 
    The checksum must equal the value in **Verified artifacts**.
@@ -58,13 +58,13 @@ source.
    export SURREALDB_ACCESS="gateway_writer"
    export SURREALDB_USERNAME="GATEWAY_ID_UPPERCASE"
    export SURREALDB_PASSWORD="NEW_GATEWAY_PASSWORD"
-   exec /root/lorawan-sniffer
+   exec /root/lorawan-ray-collector
    ```
 
 ## Cutover
 
-1. Stop every running gateway sniffer and leave the packet forwarders pointed
-   at their local UDP listener. Confirm no `lorawan-sniffer` process remains.
+1. Stop every running collector and leave the packet forwarders pointed
+   at their local UDP listener. Confirm no `lorawan-ray-collector` process remains.
 2. In Surrealist, connected as the database owner, reset only this database:
 
    ```surql
@@ -84,8 +84,8 @@ source.
 
    ```sh
    mv /root/lorawan-sniffer /root/lorawan-sniffer.previous
-   mv /root/lorawan-sniffer.new /root/lorawan-sniffer
-   chmod 700 /root/lorawan-sniffer /root/start.sh
+   mv /root/lorawan-ray-collector.new /root/lorawan-ray-collector
+   chmod 700 /root/lorawan-ray-collector /root/start.sh
    nohup /root/start.sh >/dev/null 2>&1 </dev/null &
    ```
 
@@ -101,4 +101,4 @@ source.
 The database reset cannot restore the old records. The user and invitation
 tables are recreated empty, and the configured administrator account is created
 again on first sign-in. The previous gateway executable remains recoverable as
-`/root/lorawan-sniffer.previous` until the cutover has been accepted.
+`/root/lorawan-sniffer.previous` until the renamed collector has been accepted.

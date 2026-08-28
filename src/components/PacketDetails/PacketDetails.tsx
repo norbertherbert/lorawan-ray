@@ -33,7 +33,14 @@ export default function PacketDetails({ packet, loading, error }: PacketDetailsP
               <TreeGroup label="MACPayload">
                 <TreeGroup label="FHDR">
                   <TreeValue label="DevAddr" value={packet.frame.macPayload.fhdr.devAddr} mono />
-                  <TreeValue label="FCtrl" value={packet.frame.macPayload.fhdr.fCtrl.rawHex} mono />
+                  <TreeGroup label="FCtrl">
+                    <TreeValue label="Raw" value={packet.frame.macPayload.fhdr.fCtrl.rawHex} mono />
+                    <TreeValue label="ADR" value={flagValue(packet.frame.macPayload.fhdr.fCtrl.adr)} />
+                    <TreeValue label="ADRACKReq" value={flagValue(packet.frame.macPayload.fhdr.fCtrl.adrAckRequest)} />
+                    <TreeValue label="ACK" value={flagValue(packet.frame.macPayload.fhdr.fCtrl.ack)} />
+                    <TreeValue label="ClassB" value={flagValue(packet.frame.macPayload.fhdr.fCtrl.classB)} />
+                    <TreeValue label="FOptsLen" value={packet.frame.macPayload.fhdr.fCtrl.fOptsLength} />
+                  </TreeGroup>
                   <TreeValue label="FCnt" value={packet.frame.macPayload.fhdr.fCnt16} />
                   <TreeValue label="FOpts" value={packet.frame.macPayload.fhdr.fOptsHex || '—'} mono />
                 </TreeGroup>
@@ -99,4 +106,8 @@ function TreeValue({ label, value, mono = false }: { label: string; value: strin
 
 function groupHex(value: string): string {
   return value.match(/.{1,2}/g)?.join(' ') ?? value;
+}
+
+function flagValue(value: boolean): string {
+  return value ? '1 (set)' : '0 (not set)';
 }

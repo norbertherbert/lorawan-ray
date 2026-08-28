@@ -46,18 +46,6 @@ export function formatDate(value) {
   return `${datePart} ${timePart}`;
 }
 
-/** Produces readable JSON without the top-level SurrealDB record ID. */
-export function stringifyJson(value) {
-  const visibleEntries = Object.entries(value).filter(([key]) => key !== 'id');
-
-  return JSON.stringify(
-    Object.fromEntries(visibleEntries),
-    (_key, nestedValue) =>
-      typeof nestedValue === 'bigint' ? nestedValue.toString() : nestedValue,
-    2,
-  );
-}
-
 export function generateInvitationToken() {
   return bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32)));
 }
@@ -104,7 +92,7 @@ export function isSessionAuthenticationError(error) {
 
   while (current && typeof current === 'object' && !visited.has(current)) {
     visited.add(current);
-    if (current.isTokenExpired === true) return true;
+    if (current.isTokenExpired === true || current.isInvalidAuth === true) return true;
 
     const details = current.details;
     const authKind = details?.kind === 'Auth' ? details.details?.kind : null;

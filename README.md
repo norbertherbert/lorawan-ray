@@ -1,6 +1,8 @@
-# LoRaWAN Sniffer: Google Sign-In + SurrealDB Cloud
+# LoRaWAN Ray Web UI
 
-A React-based, read-only viewer for LoRaWAN packets, with administrator approval
+`lorawan-ray-webui` is the GUI component of the **LoRaWAN Ray** solution and is
+displayed as **LoRaWAN Ray**. It is a React-based, read-only interface for
+LoRaWAN packets, with administrator approval
 and single-use invitations. Vite builds the static app for GitHub Pages, while a small Cloudflare
 Worker verifies Google ID tokens and exchanges them for 15-minute SurrealDB record-user tokens.
 
@@ -16,11 +18,10 @@ The Worker is necessary because Google ID tokens cannot contain SurrealDB's requ
 and `ac` claims. It never receives a SurrealDB system-user password and is not involved in normal
 reception queries.
 
-The deployed viewer currently continues to read the legacy `gateway_rxpk` table. The normalized
-analyzer data source under `src/api/` reads `lorawan_uplink` and its linked `gateway_reception`
-records directly from SurrealDB using the same authenticated browser connection. Its structured
-filters, whitelisted sorting, and opaque keyset cursors are evaluated server-side. This path will
-replace the legacy table only during the coordinated database/UI cutover.
+The Analyzer reads normalized `lorawan_uplink` records and their linked
+`gateway_reception` records directly from SurrealDB using the authenticated
+browser connection. Its structured filters, whitelisted sorting, and opaque
+keyset cursors are evaluated server-side.
 
 The Analyzer treats modulation as a first-class radio property. Its dense table shows modulation
 and the packet-forwarder data-rate identifier, including LR-FHSS values such as `M0CW137`. LoRa

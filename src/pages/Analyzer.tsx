@@ -13,11 +13,12 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 interface AnalyzerProps {
   dataSource: UplinkDataSource;
   sourceKey: string;
-  sourceLabel: string;
+  sourceLabel?: string;
+  requireActiveSession?: () => boolean;
   onDatabaseError?: (cause: unknown, fallback: string) => void;
 }
 
-export default function Analyzer({ dataSource, sourceKey, sourceLabel, onDatabaseError }: AnalyzerProps) {
+export default function Analyzer({ dataSource, sourceKey, sourceLabel, requireActiveSession, onDatabaseError }: AnalyzerProps) {
   const [page, setPage] = useState(0);
   const [pageRequest, setPageRequest] = useState<UplinkPageRequest>({ limit: 25 });
   const [sorting, setSorting] = useState<SortingState>([{ id: 'observedAt', desc: true }]);
@@ -90,6 +91,11 @@ export default function Analyzer({ dataSource, sourceKey, sourceLabel, onDatabas
     setPageRequest({ limit: pageRequest.limit, before: cursor });
   }
 
+  function refreshPackets() {
+    if (requireActiveSession?.() === false) return;
+    void packets.refetch();
+  }
+
   return (
     <section className="card analyzer-card" id="analyzer-card">
       <div className="analyzer-heading">
@@ -97,7 +103,7 @@ export default function Analyzer({ dataSource, sourceKey, sourceLabel, onDatabas
           <p className="section-label">lorawan_uplink</p>
           <h2>Packet analyzer</h2>
         </div>
-        <span className={`analyzer-source${sourceKey.startsWith('mock') ? ' is-mock' : ''}`}>{sourceLabel}</span>
+        {sourceLabel ? <span className="analyzer-source is-mock">{sourceLabel}</span> : null}
       </div>
 
       <FilterBuilder value={filterDraft} busy={packets.isFetching} onApply={applyFilters} />
@@ -118,7 +124,7 @@ export default function Analyzer({ dataSource, sourceKey, sourceLabel, onDatabas
           <span>Page {page + 1}</span>
           <Button color="alternative" size="xs" onClick={goEarlier} disabled={packets.isFetching || !packets.data?.pageInfo.hasNextPage}>Earlier</Button>
         </div>
-        <button className={`refresh-icon-button${packets.isFetching ? ' is-busy' : ''}`} type="button" onClick={() => packets.refetch()} disabled={packets.isFetching} title="Refresh packets" aria-label="Refresh packets">
+        <button className={`refresh-icon-button${packets.isFetching ? ' is-busy' : ''}`} type="button" onClick={refreshPackets} disabled={packets.isFetching} title="Refresh packets" aria-label="Refresh packets">
           <RefreshIcon />
         </button>
       </nav>

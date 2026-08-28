@@ -91,8 +91,9 @@ export interface DatabaseLogicalUplink {
   first_observed_at: string;
   last_observed_at: string;
   correlation: {
-    method: 'payload_hash+gateway_time_100ms' | 'single_reception';
-    bucket?: string;
+    method: 'payload_hash+gateway_time_200ms' | 'single_reception';
+    anchor_at?: string;
+    window_ms?: number;
   };
   phy: Required<DatabasePhyPayload>;
   lorawan: DatabaseDecodedLoRaWAN;

@@ -1,8 +1,8 @@
-# LoRaWAN Sniffer Viewer Repository Guide
+# LoRaWAN Ray Web UI Repository Guide
 
 ## Scope
 
-This repository contains the browser-based, read-only viewer for LoRaWAN
+This repository contains `lorawan-ray-webui`, the browser-based, read-only GUI for LoRaWAN
 gateway receptions, its Cloudflare authentication Worker, and the SurrealDB
 schema for Google-authenticated users and invitations.
 
@@ -13,7 +13,7 @@ changing its code or the gateway database contract, read
 ## Sources of truth
 
 - `src/App.jsx` owns browser authentication and application-level state.
-- `src/components/` implements the reception table, JSON dialog, and administrator UI.
+- `src/components/` implements the packet Analyzer, details panes, filters, and administrator UI.
 - `src/lib.js` and `src/style.css` provide shared browser helpers and styling.
 - `worker/src/index.js` verifies Google identity and issues the short-lived
   SurrealDB record-user token.
@@ -32,13 +32,10 @@ ingestion repository and keep one authoritative definition.
 
 - Namespace: `lorawan`
 - Database: `sniffer`
-- The current viewer still reads the legacy `gateway_rxpk` table until the
-  coordinated schema/API cutover. The normalized target data source is
-  `lorawan_uplink`, with linked `gateway_reception` records.
-- The legacy reception table summarizes selected `gateway`, `lorawan`, and
-  `rxpk` fields. In the normalized target contract, reception identity and
-  timestamps are top-level fields, with raw packet-forwarder data under
-  `raw_rxpk`.
+- The packet data source is `lorawan_uplink`, with linked
+  `gateway_reception` records.
+- Reception identity and timestamps are top-level fields, with raw
+  packet-forwarder data under `raw_rxpk`.
 - The browser remains read-only for gateway receptions. SurrealDB permissions,
   rather than UI controls alone, must enforce this.
 - Only approved Google record users may select receptions.

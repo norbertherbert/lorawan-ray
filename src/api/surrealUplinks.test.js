@@ -58,6 +58,8 @@ test('uses opaque keyset cursors for forward and backward pages', async () => {
 
 test('maps normalized uplink and reception rows into UI details', async () => {
   const uplink = searchRow('uplink-a', Date.parse('2026-08-27T12:00:00Z'));
+  uplink.lorawan.fctrl_hex = 'D2';
+  uplink.lorawan.fopts_hex = '0304';
   const reception = {
     id: 'gateway_reception:rx-a',
     __record_key: 'rx-a',
@@ -86,6 +88,14 @@ test('maps normalized uplink and reception rows into UI details', async () => {
 
   assert.equal(details.id, 'uplink-a');
   assert.equal(details.frame.kind, 'data-uplink');
+  assert.deepEqual(details.frame.macPayload.fhdr.fCtrl, {
+    rawHex: 'D2',
+    adr: true,
+    adrAckRequest: true,
+    ack: false,
+    classB: true,
+    fOptsLength: 2,
+  });
   assert.equal(details.receptions[0].frequencyMHz, 868.5);
   assert.equal(details.receptions[0].gatewayId, '647FDAFFFE005E17');
 });

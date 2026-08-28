@@ -1,5 +1,5 @@
 {
-  "name": "lorawan-sniffer-viewer",
+  "name": "lorawan-ray-webui",
   "private": true,
   "version": "1.0.0",
   "type": "module",

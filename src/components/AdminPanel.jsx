@@ -64,7 +64,6 @@ export default function AdminPanel({
           <p className="section-label">Administration</p>
           <h2>Users &amp; invitations</h2>
         </div>
-        <span className="number">03</span>
       </div>
 
       <div className="admin-section">
