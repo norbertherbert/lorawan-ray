@@ -19,7 +19,7 @@ interface AnalyzerProps {
 
 export default function Analyzer({ dataSource, sourceKey, sourceLabel, requireActiveSession, onDatabaseError }: AnalyzerProps) {
   const [page, setPage] = useState(0);
-  const [pageRequest, setPageRequest] = useState<UplinkPageRequest>({ limit: 10 });
+  const [pageRequest, setPageRequest] = useState<UplinkPageRequest>({ limit: 25 });
   const [sorting, setSorting] = useState<SortingState>([{ id: 'observedAt', desc: true }]);
   const [filterDraft, setFilterDraft] = useState<FilterDraft>(emptyFilterDraft);
   const [filters, setFilters] = useState<UplinkFilters | undefined>();

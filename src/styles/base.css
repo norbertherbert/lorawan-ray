@@ -1,0 +1,244 @@
+html {
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  overflow-x: hidden;
+  background:
+    linear-gradient(rgba(24, 25, 24, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(24, 25, 24, 0.045) 1px, transparent 1px),
+    #f1f0ea;
+  background-size: 32px 32px;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.shell {
+  width: min(1200px, calc(100% - 16px));
+  margin: 0 auto;
+  padding: 72px 0;
+}
+
+.shell.analyzer-shell {
+  display: flex;
+  flex-direction: column;
+  width: calc(100% - 24px);
+  height: max(100dvh, 800px);
+  min-height: 0;
+  padding: 18px 0 28px;
+  overflow: visible;
+}
+
+.analyzer-shell .hero {
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 12px;
+}
+
+.analyzer-shell .session-actions {
+  width: auto;
+  gap: 7px;
+}
+
+.analyzer-shell .status,
+.analyzer-shell .logout-button,
+.analyzer-shell .admin-toggle-button {
+  padding: 7px 11px;
+  font-size: 0.62rem;
+}
+
+.analyzer-shell .status > span:last-child,
+.analyzer-shell .logout-button > span,
+.analyzer-shell .admin-toggle-button > span {
+  display: inline-block;
+  transform: translateY(1px);
+}
+
+.hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+  margin-bottom: 12px;
+}
+
+.brand {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-mark {
+  display: block;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+}
+
+.analyzer-shell .brand-mark {
+  width: 36px;
+  height: 36px;
+}
+
+.number,
+.status,
+dt {
+  font-family: 'DM Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(1.45rem, 2.4vw, 2.15rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+}
+
+.status {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 254, 250, 0.8);
+  font-size: 0.68rem;
+}
+
+.session-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.logout-button,
+.admin-toggle-button {
+  padding: 10px 14px;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.logout-button {
+  color: var(--paper);
+  background: var(--ink);
+}
+
+.admin-toggle-button {
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.logout-button:hover,
+.admin-toggle-button:hover,
+.admin-toggle-button[aria-expanded='true'] {
+  border-color: var(--accent);
+  color: var(--paper);
+  background: var(--accent);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #a1a19c;
+}
+
+.status[data-state='online'] .status-dot {
+  background: var(--green);
+  box-shadow: 0 0 0 4px rgba(39, 122, 83, 0.13);
+}
+
+.status[data-state='connecting'] .status-dot {
+  background: #e2a80a;
+  animation: pulse 1s infinite alternate;
+}
+
+.status[data-state='pending'] .status-dot {
+  background: #e2a80a;
+  box-shadow: 0 0 0 4px rgba(226, 168, 10, 0.14);
+}
+
+.card {
+  width: 100%;
+  margin-bottom: 18px;
+  padding: clamp(24px, 3.5vw, 36px);
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+  background: var(--paper);
+  box-shadow: 7px 7px 0 var(--ink);
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 9px;
+}
+
+h2 {
+  margin: 0;
+  font-size: clamp(1.15rem, 2vw, 1.5rem);
+  letter-spacing: -0.045em;
+}
+
+.number {
+  color: #a2a29d;
+  font-size: 0.75rem;
+}
+
+label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+input:not([type='checkbox']),
+select {
+  width: 100%;
+  min-width: 0;
+  padding: 14px 15px;
+  border: 1px solid #aaa9a3;
+  border-radius: 2px;
+  outline: none;
+  background: #fff;
+}
+
+input:not([type='checkbox']):focus,
+select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255, 79, 0, 0.13);
+}

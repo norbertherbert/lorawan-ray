@@ -1,12 +1,16 @@
+import { parseTime } from '@internationalized/date';
 import { Badge, Button } from 'flowbite-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { DateInput, DateSegment, TimeField, type TimeValue } from 'react-aria-components';
 import type { UplinkFilters } from '../../api/types.ts';
 import type { Modulation } from '../../api/types.ts';
 
 export interface FilterDraft {
   text: string;
-  from: string;
-  to: string;
+  fromDate: string;
+  fromTime: string;
+  toDate: string;
+  toTime: string;
   devEui: string;
   devAddr: string;
   gatewayId: string;
@@ -20,8 +24,10 @@ export interface FilterDraft {
 
 const EMPTY_FILTERS: FilterDraft = {
   text: '',
-  from: '',
-  to: '',
+  fromDate: '',
+  fromTime: '',
+  toDate: '',
+  toTime: '',
   devEui: '',
   devAddr: '',
   gatewayId: '',
@@ -80,8 +86,20 @@ export default function FilterBuilder({ value, busy, onApply }: FilterBuilderPro
       <form onSubmit={apply}>
         <div className="analyzer-filter-grid">
           <FilterField label="Search" value={draft.text} placeholder="Payload, address, MType…" onChange={(value) => update('text', value)} />
-          <FilterField label="Observed from" value={draft.from} placeholder="YYYY-MM-DD HH:MM:SS" onChange={(value) => update('from', value)} />
-          <FilterField label="Observed to" value={draft.to} placeholder="YYYY-MM-DD HH:MM:SS" onChange={(value) => update('to', value)} />
+          <DateTimeFilterField
+            label="Observed from"
+            date={draft.fromDate}
+            time={draft.fromTime}
+            onDateChange={(value) => update('fromDate', value)}
+            onTimeChange={(value) => update('fromTime', value)}
+          />
+          <DateTimeFilterField
+            label="Observed to"
+            date={draft.toDate}
+            time={draft.toTime}
+            onDateChange={(value) => update('toDate', value)}
+            onTimeChange={(value) => update('toTime', value)}
+          />
           <FilterField label="DevEUI" value={draft.devEui} placeholder="70B3D57ED0001001" onChange={(value) => update('devEui', value)} />
           <FilterField label="DevAddr" value={draft.devAddr} placeholder="26011ABC" onChange={(value) => update('devAddr', value)} />
           <FilterField label="Gateway" value={draft.gatewayId} placeholder="647FDAFFFE005E17" onChange={(value) => update('gatewayId', value)} />
@@ -94,8 +112,8 @@ export default function FilterBuilder({ value, busy, onApply }: FilterBuilderPro
         </div>
         {validationError ? <p className="analyzer-filter-error" role="alert">{validationError}</p> : null}
         <div className="analyzer-filter-actions">
-          <Button color="alternative" size="xs" type="button" onClick={clear} disabled={busy}>Clear</Button>
-          <Button color="dark" size="xs" type="submit" disabled={busy}>Apply filter</Button>
+          <Button className="analyzer-filter-action filter-clear-action" color="alternative" size="xs" type="button" onClick={clear} disabled={busy}>Clear</Button>
+          <Button className="analyzer-filter-action filter-apply-action" color="dark" size="xs" type="submit" disabled={busy}>Apply filter</Button>
         </div>
       </form>
     </details>
@@ -126,6 +144,78 @@ function FilterField({ label, value, placeholder, inputMode, onChange }: FilterF
   );
 }
 
+interface DateTimeFilterFieldProps {
+  label: string;
+  date: string;
+  time: string;
+  onDateChange: (value: string) => void;
+  onTimeChange: (value: string) => void;
+}
+
+function DateTimeFilterField({
+  label,
+  date,
+  time,
+  onDateChange,
+  onTimeChange,
+}: DateTimeFilterFieldProps) {
+  const nativeDatePicker = useRef<HTMLInputElement>(null);
+
+  function openDatePicker() {
+    if (typeof nativeDatePicker.current?.showPicker === 'function') {
+      nativeDatePicker.current.showPicker();
+    } else {
+      nativeDatePicker.current?.click();
+    }
+  }
+
+  return (
+    <div className="analyzer-filter-field">
+      <span>{label}</span>
+      <span className="analyzer-datetime-inputs">
+        <span className="analyzer-date-input">
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            aria-label={`${label} date`}
+            value={date}
+            placeholder="YYYY-MM-DD"
+            onChange={(event) => onDateChange(event.target.value)}
+          />
+          <button type="button" aria-label={`Pick ${label.toLowerCase()} date`} onClick={openDatePicker}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 3v3m10-3v3M4.5 9h15M6 5h12a1.5 1.5 0 0 1 1.5 1.5v12A1.5 1.5 0 0 1 18 20H6a1.5 1.5 0 0 1-1.5-1.5v-12A1.5 1.5 0 0 1 6 5Z" />
+            </svg>
+          </button>
+          <input
+            ref={nativeDatePicker}
+            className="analyzer-native-date-picker"
+            type="date"
+            tabIndex={-1}
+            aria-hidden="true"
+            value={/^\d{4}-\d{2}-\d{2}$/.test(date) ? date : ''}
+            onChange={(event) => onDateChange(event.target.value)}
+          />
+        </span>
+        <TimeField
+          className="analyzer-time-input"
+          aria-label={`${label} time`}
+          value={parseTimeFilterValue(time)}
+          hourCycle={24}
+          granularity="second"
+          shouldForceLeadingZeros
+          onChange={(value) => onTimeChange(formatTimeFilterValue(value))}
+        >
+          <DateInput className="analyzer-time-field">
+            {(segment) => <DateSegment className="analyzer-time-segment" segment={segment} />}
+          </DateInput>
+        </TimeField>
+      </span>
+    </div>
+  );
+}
+
 function FilterSelect({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <label>
@@ -147,8 +237,8 @@ export function normalizeFilterDraft(input: FilterDraft): {
   const draft = Object.fromEntries(
     Object.entries(input).map(([key, value]) => [key, value.trim()]),
   ) as unknown as FilterDraft;
-  const from = parseLocalTimestamp(draft.from, false);
-  const to = parseLocalTimestamp(draft.to, true);
+  const from = parseLocalDateAndTime(draft.fromDate, draft.fromTime, 'Observed from', false);
+  const to = parseLocalDateAndTime(draft.toDate, draft.toTime, 'Observed to', true);
   if (from && to && from > to) throw new Error('Observed from must not be after observed to.');
 
   const fPorts = parseIntegerList(draft.fPort, 'FPort', 0, 255);
@@ -187,7 +277,46 @@ export function emptyFilterDraft(): FilterDraft {
 }
 
 function countActiveFilters(filters: FilterDraft): number {
-  return Object.values(filters).filter((value) => value.trim()).length;
+  const {
+    fromDate,
+    fromTime,
+    toDate,
+    toTime,
+    ...otherFilters
+  } = filters;
+  return Object.values(otherFilters).filter((value) => value.trim()).length
+    + Number(Boolean(fromDate.trim() || fromTime.trim()))
+    + Number(Boolean(toDate.trim() || toTime.trim()));
+}
+
+function parseLocalDateAndTime(
+  date: string,
+  time: string,
+  label: string,
+  endOfDay: boolean,
+): Date | undefined {
+  if (!date && !time) return undefined;
+  if (!date) throw new Error(`${label} requires a date.`);
+  if (time && !/^\d{2}:\d{2}(?::\d{2})?$/.test(time)) {
+    throw new Error(`${label} time must use HH:MM or HH:MM:SS.`);
+  }
+  return parseLocalTimestamp(`${date}${time ? ` ${time}` : ''}`, endOfDay);
+}
+
+function parseTimeFilterValue(value: string): TimeValue | null {
+  if (!value) return null;
+  try {
+    return parseTime(value);
+  } catch {
+    return null;
+  }
+}
+
+function formatTimeFilterValue(value: TimeValue | null): string {
+  if (!value) return '';
+  return [value.hour, value.minute, value.second]
+    .map((part) => String(part).padStart(2, '0'))
+    .join(':');
 }
 
 function parseLocalTimestamp(value: string, endOfDay: boolean): Date | undefined {

@@ -5,7 +5,12 @@ import {
   hashInvitationToken,
   isValidInvitationToken,
   normalizeEmail,
+  SESSION_DURATION_SECONDS,
 } from '../src/index.js';
+
+test('limits authenticated sessions to one hour', () => {
+  assert.equal(SESSION_DURATION_SECONDS, 60 * 60);
+});
 
 test('normalizes verified Google email addresses', () => {
   assert.equal(normalizeEmail('  Person@Example.COM '), 'person@example.com');

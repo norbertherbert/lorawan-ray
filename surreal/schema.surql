@@ -14,7 +14,8 @@ DEFINE TABLE OVERWRITE user SCHEMAFULL
   PERMISSIONS
     FOR select WHERE id = $auth.id OR $auth.is_admin = true
     FOR update WHERE $auth.is_admin = true
-    FOR create, delete NONE;
+    FOR create NONE
+    FOR delete WHERE $auth.is_admin = true AND id != $auth.id;
 
 DEFINE FIELD OVERWRITE google_sub ON TABLE user TYPE string
   PERMISSIONS
@@ -78,11 +79,15 @@ DEFINE FIELD OVERWRITE accepted_at ON TABLE invitation TYPE option<datetime>;
 DEFINE INDEX OVERWRITE invitation_token_hash ON TABLE invitation FIELDS token_hash UNIQUE;
 DEFINE INDEX OVERWRITE invitation_email_status ON TABLE invitation FIELDS email, status;
 
--- Keep approval-based registration as the safe default. A database owner can
--- temporarily change this parameter without redefining the access method; see
--- open_registration.surql and close_registration.surql.
-DEFINE PARAM IF NOT EXISTS $open_registration VALUE false
-  PERMISSIONS NONE;
+-- Keep registration configuration private from ordinary record users while
+-- allowing administrators to view and change it from the web UI. If this
+-- singleton record does not exist, registration remains approval-based.
+DEFINE TABLE OVERWRITE auth_config SCHEMAFULL
+  PERMISSIONS
+    FOR select, create, update WHERE $auth.is_admin = true
+    FOR delete NONE;
+DEFINE FIELD OVERWRITE open_registration ON TABLE auth_config TYPE bool
+  DEFAULT false;
 
 DEFINE ACCESS OVERWRITE google ON DATABASE TYPE RECORD
   WITH JWT ALGORITHM HS512 KEY "__SURREAL_JWT_SECRET__"
@@ -98,26 +103,33 @@ DEFINE ACCESS OVERWRITE google ON DATABASE TYPE RECORD
     };
 
     LET $user = type::record("user", string::concat("google_", $token.sub));
-    UPSERT ONLY $user MERGE {
-      google_sub: $token.sub,
-      email: $token.email,
-      name: $token.name,
-      picture: $token.picture,
-      last_login: time::now()
-    };
-
-    IF $open_registration {
-      UPDATE ONLY $user SET
-        approved = true,
-        approved_at = time::now();
+    IF auth_config:registration.open_registration = true {
+      UPSERT ONLY $user MERGE {
+        google_sub: $token.sub,
+        email: $token.email,
+        name: $token.name,
+        picture: $token.picture,
+        last_login: time::now(),
+        approved: true,
+        approved_at: time::now()
+      };
+    } ELSE {
+      UPSERT ONLY $user MERGE {
+        google_sub: $token.sub,
+        email: $token.email,
+        name: $token.name,
+        picture: $token.picture,
+        last_login: time::now()
+      };
     };
 
     IF string::lowercase(string::trim($token.email)) =
        string::lowercase("__ADMIN_EMAIL__") {
-      UPDATE ONLY $user SET
-        approved = true,
-        approved_at = time::now(),
-        is_admin = true;
+      UPSERT ONLY $user MERGE {
+        approved: true,
+        approved_at: time::now(),
+        is_admin: true
+      };
     };
 
     IF $token.invitation_hash IS NOT NONE {
@@ -131,7 +143,10 @@ DEFINE ACCESS OVERWRITE google ON DATABASE TYPE RECORD
       );
 
       IF $invitation IS NOT NONE {
-        UPDATE ONLY $user SET approved = true, approved_at = time::now();
+        UPSERT ONLY $user MERGE {
+          approved: true,
+          approved_at: time::now()
+        };
         UPDATE ONLY $invitation SET
           status = "accepted",
           accepted_by = $user,

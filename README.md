@@ -84,6 +84,8 @@ cannot create, update, or delete packet records.
 - A first-time Google user without an invitation is registered as `approved: false` and sees an
   approval-pending screen.
 - The administrator can approve pending users from the web app.
+- The administrator can enable or disable verified-Google self-registration from the web app.
+- The administrator can delete other user accounts, but cannot delete their own account.
 - The administrator can create expiring invitation links bound to a normalized Google email.
 - Opening an invitation removes its token from the address bar before Google Sign-In begins.
 - The browser stores only a SHA-256 token hash in SurrealDB; the raw token is shown to the
@@ -183,7 +185,7 @@ relative asset URLs, so it works at `/repository-name/` as well as on a custom d
 
 - Google tokens are signature-, issuer-, audience-, and expiry-verified by the Worker.
 - The Worker only accepts configured browser origins and returns no cookies.
-- Surreal tokens last 15 minutes and Surreal WebSocket sessions last at most one hour.
+- Surreal tokens and Surreal WebSocket sessions last at most one hour.
 - Tokens remain in memory; the app does not use local storage.
 - SurrealDB record permissions—not the UI—enforce approval, administrator access, invitation
   management, and read-only reception access.

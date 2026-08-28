@@ -2,5 +2,5 @@
 -- packet read access immediately. The authentication Worker is unchanged.
 USE NS lorawan DB ray;
 
-DEFINE PARAM OVERWRITE $open_registration VALUE true
-  PERMISSIONS NONE;
+UPSERT ONLY auth_config:registration
+  SET open_registration = true;

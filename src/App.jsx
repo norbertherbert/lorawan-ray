@@ -44,8 +44,10 @@ export default function App() {
   const [invitationToken, setInvitationToken] = useState(initialInvitation.token);
   const [signedInUser, setSignedInUser] = useState(null);
   const [currentProfile, setCurrentProfile] = useState(null);
+  const [registeredUsers, setRegisteredUsers] = useState([]);
   const [pendingUsers, setPendingUsers] = useState([]);
   const [activeInvitations, setActiveInvitations] = useState([]);
+  const [selfRegistrationEnabled, setSelfRegistrationEnabled] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [approvalBusy, setApprovalBusy] = useState(false);
@@ -83,8 +85,10 @@ export default function App() {
     clearSessionExpiry();
     setSignedInUser(null);
     setCurrentProfile(null);
+    setRegisteredUsers([]);
     setPendingUsers([]);
     setActiveInvitations([]);
+    setSelfRegistrationEnabled(false);
     setAdminOpen(false);
   }
 
@@ -160,16 +164,22 @@ export default function App() {
     setAdminRefreshing(true);
 
     try {
-      const [nextPendingUsers, nextActiveInvitations] = await db.query(`
+      const [nextRegisteredUsers, nextPendingUsers, nextActiveInvitations, registrationConfig] =
+        await db.query(`
+        SELECT id, email, name, approved, is_admin, created_at, last_login
+          FROM user ORDER BY is_admin DESC, email ASC;
         SELECT id, email, name, created_at, last_login
           FROM user WHERE approved = false ORDER BY created_at ASC;
         SELECT id, email, status, expires_at, created_at
           FROM invitation
           WHERE status = "pending" AND expires_at > time::now()
           ORDER BY created_at DESC;
+        SELECT open_registration FROM ONLY auth_config:registration;
       `);
+      setRegisteredUsers(nextRegisteredUsers);
       setPendingUsers(nextPendingUsers);
       setActiveInvitations(nextActiveInvitations);
+      setSelfRegistrationEnabled(registrationConfig?.open_registration === true);
       return true;
     } catch (cause) {
       await handleDatabaseError(cause, 'Could not load administrator data.');
@@ -337,6 +347,36 @@ export default function App() {
     }
   }
 
+  async function deleteUser(user) {
+    if (!requireActiveSession()) return;
+    if (user.id.toString() === currentProfile?.id?.toString()) {
+      setError('You cannot delete your own administrator account.');
+      return;
+    }
+
+    clearError();
+    try {
+      await db.delete(user.id);
+      await loadAdminData();
+    } catch (cause) {
+      await handleDatabaseError(cause, 'Could not delete the user.');
+    }
+  }
+
+  async function setSelfRegistration(enabled) {
+    if (!requireActiveSession()) return;
+    clearError();
+    try {
+      await db.query(
+        'UPSERT ONLY auth_config:registration SET open_registration = $enabled',
+        { enabled },
+      );
+      await loadAdminData();
+    } catch (cause) {
+      await handleDatabaseError(cause, 'Could not change the self-registration setting.');
+    }
+  }
+
   async function revokeInvitation(invitation) {
     if (!requireActiveSession()) return;
     clearError();
@@ -379,8 +419,14 @@ export default function App() {
     <>
       <main className={`shell${approved && !adminOpen ? ' analyzer-shell' : ''}`}>
         <header className="hero">
-          <div>
+          <div className="brand">
             <h1>LoRaWAN Ray</h1>
+            <img
+              className="brand-mark"
+              src={`${import.meta.env.BASE_URL}lorawan-ray-mark.png`}
+              alt=""
+              aria-hidden="true"
+            />
           </div>
           <div className="session-actions">
             <div className="status" data-state={status.state}>
@@ -395,7 +441,7 @@ export default function App() {
               onClick={toggleAdminPanel}
               hidden={!isAdmin}
             >
-              {adminOpen ? 'Close admin' : 'Users & invitations'}
+              <span>{adminOpen ? 'Close admin' : 'Users & invitations'}</span>
             </button>
             <button
               className="logout-button"
@@ -404,7 +450,7 @@ export default function App() {
               disabled={logoutBusy}
               hidden={!currentProfile}
             >
-              {logoutBusy ? 'Logging out…' : 'Logout'}
+              <span>{logoutBusy ? 'Logging out…' : 'Logout'}</span>
             </button>
           </div>
         </header>
@@ -412,7 +458,7 @@ export default function App() {
         <section className="card connection-card" hidden={Boolean(currentProfile)}>
           <div className="section-heading">
             <div>
-              <h2>Sign in to the demo</h2>
+              <h2>Sign in</h2>
             </div>
           </div>
 
@@ -467,11 +513,16 @@ export default function App() {
 
         {isAdmin && adminOpen ? (
           <AdminPanel
+            registeredUsers={registeredUsers}
             pendingUsers={pendingUsers}
             activeInvitations={activeInvitations}
+            currentUserId={currentProfile.id}
+            selfRegistrationEnabled={selfRegistrationEnabled}
             refreshing={adminRefreshing}
             onRefresh={loadAdminData}
             onApprove={approveUser}
+            onDeleteUser={deleteUser}
+            onSetSelfRegistration={setSelfRegistration}
             onRevoke={revokeInvitation}
             onCreateInvitation={createInvitation}
             onError={reportError}

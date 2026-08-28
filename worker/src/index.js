@@ -2,6 +2,7 @@ import { SignJWT, createRemoteJWKSet, jwtVerify } from 'jose';
 
 const googleKeys = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 const encoder = new TextEncoder();
+export const SESSION_DURATION_SECONDS = 60 * 60;
 
 export default {
   async fetch(request, env) {
@@ -52,7 +53,7 @@ export default {
 
       const normalizedEmail = normalizeEmail(payload.email);
       const invitationHash = invitation ? await hashInvitationToken(invitation) : undefined;
-      const expiresInSeconds = 15 * 60;
+      const expiresInSeconds = SESSION_DURATION_SECONDS;
       const token = await new SignJWT({
         ns: env.SURREAL_NAMESPACE,
         db: env.SURREAL_DATABASE,
