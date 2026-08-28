@@ -1,0 +1,36 @@
+name: Check collector
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "lorawan-ray-collector/**"
+      - ".github/workflows/collector.yml"
+  pull_request:
+    paths:
+      - "lorawan-ray-collector/**"
+      - ".github/workflows/collector.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lorawan-ray-collector
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
+      - name: Select Rust
+        run: rustup default stable
+      - name: Check formatting
+        run: cargo fmt -- --check
+      - name: Run tests
+        run: cargo test --locked
+      - name: Run Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings

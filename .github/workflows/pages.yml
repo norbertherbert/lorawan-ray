@@ -3,6 +3,8 @@ name: Deploy web app to GitHub Pages
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "lorawan-ray-collector/**"
   workflow_dispatch:
 
 permissions:
@@ -30,8 +32,6 @@ jobs:
       - name: Build
         env:
           VITE_SURREAL_ENDPOINT: ${{ vars.VITE_SURREAL_ENDPOINT }}
-          VITE_SURREAL_NAMESPACE: ${{ vars.VITE_SURREAL_NAMESPACE }}
-          VITE_SURREAL_DATABASE: ${{ vars.VITE_SURREAL_DATABASE }}
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
           VITE_AUTH_BROKER_URL: ${{ vars.VITE_AUTH_BROKER_URL }}
         run: npm run build

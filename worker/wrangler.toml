@@ -3,7 +3,6 @@ main = "src/index.js"
 compatibility_date = "2026-08-18"
 
 [vars]
-GOOGLE_CLIENT_ID = "1011598554930-bkr0kuce43itfl75itlkp927ff21b5lt.apps.googleusercontent.com"
 SURREAL_NAMESPACE = "lorawan"
 SURREAL_DATABASE = "ray"
 SURREAL_ACCESS = "google"
@@ -13,3 +12,5 @@ ALLOWED_ORIGINS = "http://localhost:5173,https://norbertherbert.github.io"
 
 # SURREAL_JWT_SECRET is deliberately absent. Add it with:
 # npm run worker:secret
+# GOOGLE_CLIENT_ID is deliberately absent. Add it with:
+# npm run worker:google-client-id

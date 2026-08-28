@@ -1,10 +1,22 @@
-# LoRaWAN Ray Web UI
+# LoRaWAN Ray
 
-`lorawan-ray-webui` is the GUI component of the **LoRaWAN Ray** solution and is
-displayed as **LoRaWAN Ray**. It is a React-based, read-only interface for
-LoRaWAN packets, with administrator approval
-and single-use invitations. Vite builds the static app for GitHub Pages, while a small Cloudflare
-Worker verifies Google ID tokens and exchanges them for 15-minute SurrealDB record-user tokens.
+This repository contains the **LoRaWAN Ray** packet collection and analysis
+solution:
+
+- [`lorawan-ray-webui`](package.json) is the React-based, read-only packet
+  analyzer displayed as **LoRaWAN Ray**. It is built with Vite and deployed to
+  GitHub Pages.
+- [`lorawan-ray-collector`](lorawan-ray-collector/README.md) receives Semtech
+  UDP Packet Forwarder traffic, normalizes LoRaWAN uplinks and gateway radio
+  metadata, and stores them in SurrealDB Cloud.
+- [`worker`](worker/) contains the authentication-only Cloudflare Worker.
+- [`surreal`](surreal/) contains the Web UI authentication and authorization
+  schema. The collector owns the packet schema in
+  [`lorawan-ray-collector/init_db.surql`](lorawan-ray-collector/init_db.surql).
+
+The Web UI supports administrator approval and single-use invitations. The
+Cloudflare Worker verifies Google ID tokens and exchanges them for 15-minute
+SurrealDB record-user tokens.
 
 ```text
 GitHub Pages ── Google ID token ──▶ Auth Worker
@@ -50,8 +62,9 @@ This exact value is shared only between the Worker and SurrealDB. Never put it i
 
 Open [surreal/schema.surql](surreal/schema.surql) and make a temporary, untracked copy. In that copy:
 
-1. Initialize the collector schema in `NS lorawan DB ray` first so
-   `gateway_reception` and `lorawan_uplink` exist.
+1. Run the
+   [collector schema](lorawan-ray-collector/init_db.surql) in
+   `NS lorawan DB ray` first so `gateway_reception` and `lorawan_uplink` exist.
 2. Replace `__SURREAL_JWT_SECRET__` with the secret from step 1.
 3. Replace `__TOKEN_ISSUER__` with `tiny-tasks-auth`.
 4. Replace `__TOKEN_AUDIENCE__` with `tiny-tasks-surrealdb`.
@@ -59,10 +72,12 @@ Open [surreal/schema.surql](surreal/schema.surql) and make a temporary, untracke
 6. Run the script as a database owner in Surrealist. That verified Google email is automatically
    approved and designated as administrator on first sign-in.
 
-The schema creates deterministic `user:google_<google-sub>` records at first login. The listener's
-`init_db.surql` owns normalized packet-table permissions: approved Google users may select logical
-uplinks and receptions, while gateway-specific creation is preserved and browser users cannot
-create, update, or delete packet records.
+The schema creates deterministic `user:google_<google-sub>` records at first
+login. The collector's
+[`init_db.surql`](lorawan-ray-collector/init_db.surql) owns normalized
+packet-table permissions: approved Google users may select logical uplinks and
+receptions, while gateway-specific creation is preserved and browser users
+cannot create, update, or delete packet records.
 
 ## Registration and invitations
 
@@ -91,23 +106,23 @@ OAuth origins contain only scheme, host, and port.
 
 Edit [worker/wrangler.toml](worker/wrangler.toml):
 
-- Set `GOOGLE_CLIENT_ID` to the Web client ID.
 - Keep namespace/database set to `lorawan/ray`.
 - Replace the GitHub origin in `ALLOWED_ORIGINS`.
 - Keep issuer/audience synchronized with the SurrealQL script.
 
-Store the signing secret in Cloudflare and deploy:
+Store the signing secret and Google client ID in Cloudflare, then deploy:
 
 ```bash
 npm run worker:login
 npm run worker:secret
+npm run worker:google-client-id
 npm run worker:deploy
 ```
 
 Copy the resulting `https://...workers.dev` URL.
 
-For local development, copy `worker/.dev.vars.example` to `worker/.dev.vars`, put the same signing
-secret there, and run:
+For local development, copy `worker/.dev.vars.example` to `worker/.dev.vars`,
+put the same signing secret and Google client ID there, and run:
 
 ```bash
 npm run worker:dev
@@ -121,8 +136,10 @@ npm install
 npm run dev
 ```
 
-In `.env.local`, set the Google client ID and use `http://localhost:8787` for
-`VITE_AUTH_BROKER_URL` while the Worker is running locally.
+In `.env.local`, replace every `__PLACEHOLDER__` value. Use the SurrealDB
+WebSocket endpoint, your Google Web application client ID, and
+`http://localhost:8787` for `VITE_AUTH_BROKER_URL` while the Worker is running
+locally.
 
 Development and production builds use the normalized `lorawan_uplink` and
 `gateway_reception` tables by default, so neither `npm run dev` nor
@@ -143,8 +160,6 @@ In the GitHub repository:
 1. Select **Settings → Pages → Source → GitHub Actions**.
 2. Under **Settings → Secrets and variables → Actions → Variables**, add:
    - `VITE_SURREAL_ENDPOINT`
-   - `VITE_SURREAL_NAMESPACE`
-   - `VITE_SURREAL_DATABASE`
    - `VITE_GOOGLE_CLIENT_ID`
    - `VITE_AUTH_BROKER_URL` (the deployed Worker URL)
 3. Push to `main`, or run the `Deploy web app to GitHub Pages` workflow manually.

@@ -1,3 +1,4 @@
 # Copy this file to worker/.dev.vars for local Worker development.
 # Use the same value when replacing __SURREAL_JWT_SECRET__ in surreal/schema.surql.
 SURREAL_JWT_SECRET=replace-with-at-least-64-random-characters
+GOOGLE_CLIENT_ID=__GOOGLE_CLIENT_ID__
