@@ -62,12 +62,34 @@ To exercise each supported `rxpk` JSON layout separately:
 ./examples/send_jver2_rxpk.sh
 ```
 
-These send respectively a legacy packet without `jver`, a gateway-v1 packet
-with top-level signal metadata, and a gateway-v2 LR-FHSS packet using `rsig`.
-Each script uses the current UTC time so its packet appears among the latest
-receptions.
+Those three scripts respectively send a legacy packet without `jver`, a
+gateway-v1 packet with top-level signal metadata, and a gateway-v2 LR-FHSS
+packet using `rsig`. Each script uses the current UTC time so its packet appears
+among the latest receptions.
 
-The script also accepts a custom listener address and port:
+Send 10 randomized LR-FHSS uplinks through the two default simulated gateway
+collectors:
+
+```bash
+./examples/send_random_lrfhss.sh
+```
+
+The targets are defined as constants at the beginning of the script:
+
+- gateway `1032547698BADCFE` at `127.0.0.1:1700`
+- gateway `647FDAFFFE005E17` at `127.0.0.1:1701`
+
+The primary collector must authenticate as gateway `1032547698BADCFE`, and the
+second collector as `647FDAFFFE005E17`. Each logical uplink has
+one identical PHY payload sent through both collectors. The reported gateway
+timestamps differ by no more than 150 ms, while each gateway reports
+independently randomized RSSI, SNR, frequency offset, frequency drift, and
+antenna metadata. A one-second delay between sends lets the first collector's
+asynchronous database write finish before the second reception is submitted.
+The generated frames use FPort 8 and consecutive frame counters starting at
+1000; both values are constants near the beginning of the script.
+
+The basic sample script also accepts a custom listener address and port:
 
 ```bash
 ./examples/send_sample.sh 127.0.0.1 1700

@@ -1,5 +1,13 @@
--- Run this as a database owner in Surrealist after replacing the four
--- __PLACEHOLDER__ values. Never commit the resulting secret-bearing file.
+-- CONFIGURATION
+-- Replace every occurrence of each placeholder below before running this
+-- schema as a database owner in Surrealist:
+--
+--   __SURREAL_JWT_SECRET__  JWT signing secret shared with the auth worker
+--   __TOKEN_ISSUER__        expected JWT issuer (iss)
+--   __TOKEN_AUDIENCE__      expected JWT audience (aud)
+--   __ADMIN_EMAIL__         Google email address of the administrator
+--
+-- Never commit the resulting secret-bearing file.
 USE NS lorawan DB ray;
 
 DEFINE TABLE OVERWRITE user SCHEMAFULL
@@ -70,6 +78,12 @@ DEFINE FIELD OVERWRITE accepted_at ON TABLE invitation TYPE option<datetime>;
 DEFINE INDEX OVERWRITE invitation_token_hash ON TABLE invitation FIELDS token_hash UNIQUE;
 DEFINE INDEX OVERWRITE invitation_email_status ON TABLE invitation FIELDS email, status;
 
+-- Keep approval-based registration as the safe default. A database owner can
+-- temporarily change this parameter without redefining the access method; see
+-- open_registration.surql and close_registration.surql.
+DEFINE PARAM IF NOT EXISTS $open_registration VALUE false
+  PERMISSIONS NONE;
+
 DEFINE ACCESS OVERWRITE google ON DATABASE TYPE RECORD
   WITH JWT ALGORITHM HS512 KEY "__SURREAL_JWT_SECRET__"
   AUTHENTICATE {
@@ -90,6 +104,12 @@ DEFINE ACCESS OVERWRITE google ON DATABASE TYPE RECORD
       name: $token.name,
       picture: $token.picture,
       last_login: time::now()
+    };
+
+    IF $open_registration {
+      UPDATE ONLY $user SET
+        approved = true,
+        approved_at = time::now();
     };
 
     IF string::lowercase(string::trim($token.email)) =

@@ -92,6 +92,18 @@ cannot create, update, or delete packet records.
 - Invitations can be revoked before use. The administrator sends links manually, so no email
   provider or additional API key is required.
 
+### Temporarily open registration
+
+Registration remains approval-based by default. To let any user with a verified Google identity
+register and gain read-only packet access immediately, first apply the updated
+[`surreal/schema.surql`](surreal/schema.surql), preserving the same private placeholder values, and
+then run [`surreal/open_registration.surql`](surreal/open_registration.surql) as a database owner.
+The React application and authentication Worker do not need to be redeployed.
+
+To require administrator approval or an invitation for new registrations again, run
+[`surreal/close_registration.surql`](surreal/close_registration.surql). Users approved while
+registration was open remain approved; closing registration does not revoke existing access.
+
 ## 3. Configure Google
 
 In Google Cloud Console, create an OAuth 2.0 client ID of type **Web application**. Add both origins:
