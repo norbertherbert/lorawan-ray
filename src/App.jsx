@@ -28,6 +28,7 @@ import {
 import { mockUplinkDataSource } from './api/mockUplinks.ts';
 import { SurrealUplinkDataSource } from './api/surrealUplinks.ts';
 import Analyzer from './pages/Analyzer.tsx';
+import PacketErrorRate from './pages/PacketErrorRate.tsx';
 
 const useMockData = import.meta.env.VITE_USE_MOCK_DATA === 'true';
 
@@ -79,12 +80,14 @@ export default function App() {
   const [activeInvitations, setActiveInvitations] = useState([]);
   const [selfRegistrationEnabled, setSelfRegistrationEnabled] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [perOpen, setPerOpen] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [approvalBusy, setApprovalBusy] = useState(false);
   const [adminRefreshing, setAdminRefreshing] = useState(false);
   const [logoutBusy, setLogoutBusy] = useState(false);
   const [darkMode, setDarkMode] = useState(initialDarkMode);
   const googleButtonRef = useRef(null);
+  const googleInitializedRef = useRef(false);
   const authenticationHandlerRef = useRef(null);
   const sessionExpiresAtRef = useRef(null);
   const sessionExpiryTimerRef = useRef(null);
@@ -104,6 +107,22 @@ export default function App() {
 
   function clearError() {
     setError('');
+  }
+
+  function renderGoogleButton(useDarkMode = darkMode) {
+    if (!googleInitializedRef.current || !window.google?.accounts?.id || !googleButtonRef.current) {
+      return;
+    }
+
+    googleButtonRef.current.replaceChildren();
+    window.google.accounts.id.renderButton(googleButtonRef.current, {
+      type: 'standard',
+      theme: useDarkMode ? 'filled_black' : 'outline',
+      size: 'large',
+      shape: 'rectangular',
+      text: 'continue_with',
+      width: Math.min(360, googleButtonRef.current.clientWidth || 360),
+    });
   }
 
   function reportError(cause, fallback) {
@@ -130,6 +149,7 @@ export default function App() {
     setActiveInvitations([]);
     setSelfRegistrationEnabled(false);
     setAdminOpen(false);
+    setPerOpen(false);
   }
 
   async function expireSession(cause) {
@@ -306,15 +326,8 @@ export default function App() {
           callback: (payload) => authenticationHandlerRef.current?.(payload),
           cancel_on_tap_outside: true,
         });
-        googleButtonRef.current?.replaceChildren();
-        window.google.accounts.id.renderButton(googleButtonRef.current, {
-          type: 'standard',
-          theme: 'outline',
-          size: 'large',
-          shape: 'rectangular',
-          text: 'continue_with',
-          width: Math.min(360, googleButtonRef.current?.clientWidth || 360),
-        });
+        googleInitializedRef.current = true;
+        renderGoogleButton(darkMode);
         setStatus({ state: 'offline', text: 'Signed out' });
       })
       .catch((cause) => reportError(cause, 'Google Sign-In could not be loaded.'));
@@ -326,12 +339,17 @@ export default function App() {
 
     return () => {
       cancelled = true;
+      googleInitializedRef.current = false;
       clearSessionExpiry();
       window.removeEventListener('pagehide', closeConnection);
       window.removeEventListener('focus', checkSessionExpiry);
       document.removeEventListener('visibilitychange', checkSessionExpiry);
     };
   }, []);
+
+  useEffect(() => {
+    renderGoogleButton(darkMode);
+  }, [darkMode]);
 
   async function checkApproval() {
     if (!requireActiveSession()) return;
@@ -375,10 +393,17 @@ export default function App() {
 
   function showAnalyzer() {
     setAdminOpen(false);
+    setPerOpen(false);
+  }
+
+  function showPacketErrorRate() {
+    setAdminOpen(false);
+    setPerOpen(true);
   }
 
   async function showAdminPanel() {
-    if (adminOpen) return;
+    if (adminOpen && !perOpen) return;
+    setPerOpen(false);
     setAdminOpen(true);
     await loadAdminData();
   }
@@ -512,8 +537,11 @@ export default function App() {
         </div>
         {approved ? (
           <NavbarCollapse className="app-nav-tabs">
-            <NavbarLink as="button" active={!adminOpen} onClick={showAnalyzer}>
-              Analyzer
+            <NavbarLink as="button" active={!adminOpen && !perOpen} onClick={showAnalyzer}>
+              Sniffer
+            </NavbarLink>
+            <NavbarLink as="button" active={perOpen} onClick={showPacketErrorRate}>
+              PER
             </NavbarLink>
             {isAdmin ? (
               <NavbarLink as="button" active={adminOpen} onClick={showAdminPanel}>
@@ -524,7 +552,7 @@ export default function App() {
         ) : null}
       </Navbar>
 
-      <main className={`shell${approved && !adminOpen ? ' analyzer-shell' : ''}`}>
+      <main className={`shell${approved && !adminOpen && !perOpen ? ' analyzer-shell' : ''}`}>
 
         <Card className="connection-card" hidden={Boolean(currentProfile)}>
           <h2 className="text-lg font-bold tracking-tight text-gray-900">Sign in</h2>
@@ -566,7 +594,7 @@ export default function App() {
           </Button>
         </Card>
 
-        {approved && !adminOpen ? (
+        {approved && !adminOpen && !perOpen ? (
           <Analyzer
             dataSource={analyzerDataSource}
             sourceKey={`${config.uplinkSource}-v1`}
@@ -575,6 +603,8 @@ export default function App() {
             onDatabaseError={handleDatabaseError}
           />
         ) : null}
+
+        {approved && perOpen ? <PacketErrorRate /> : null}
 
         {isAdmin && adminOpen ? (
           <AdminPanel

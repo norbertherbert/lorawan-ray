@@ -99,7 +99,7 @@ export default function Analyzer({ dataSource, sourceKey, sourceLabel, requireAc
   return (
     <Card className="analyzer-card" id="analyzer-card">
       <div className="analyzer-heading">
-        <h2 className="text-base font-bold tracking-tight text-gray-900">Packet analyzer</h2>
+        <h2 className="text-base font-bold tracking-tight text-gray-900">Packet sniffer</h2>
         {sourceLabel ? <Badge className="compact-heading-badge" color="warning" size="xs">{sourceLabel}</Badge> : null}
         <FilterBuilder value={filterDraft} busy={packets.isFetching} onApply={applyFilters} />
       </div>
