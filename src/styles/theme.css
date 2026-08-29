@@ -1,25 +1,21 @@
-@theme {
-  --color-ray-canvas: #f1f0ea;
-  --color-ray-ink: #181918;
-  --color-ray-paper: #fffefa;
-  --color-ray-muted: #73746f;
-  --color-ray-line: #d8d7d0;
-  --color-ray-accent: #ff4f00;
-  --color-ray-green: #277a53;
-  --font-ray-sans: 'Manrope', sans-serif;
-  --font-ray-mono: 'DM Mono', monospace;
-}
-
 :root {
-  color: var(--color-ray-ink);
-  background: var(--color-ray-canvas);
-  font-family: 'Manrope', sans-serif;
+  color: #111827;
+  background: #f9fafb;
+  font-family: ui-sans-serif, system-ui, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --ink: var(--color-ray-ink);
-  --paper: var(--color-ray-paper);
-  --muted: var(--color-ray-muted);
-  --line: var(--color-ray-line);
-  --accent: var(--color-ray-accent);
-  --green: var(--color-ray-green);
+  --ink: #111827;
+  --paper: #fff;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+}
+
+.dark {
+  color: #f3f4f6;
+  background: #111827;
+  color-scheme: dark;
+  --ink: #f3f4f6;
+  --paper: #1f2937;
+  --muted: #9ca3af;
+  --line: #374151;
 }

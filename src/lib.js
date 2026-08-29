@@ -73,16 +73,33 @@ export function errorMessage(error, fallback) {
 /** Reads a JWT expiry for client-side session UX. SurrealDB still verifies the token. */
 export function jwtExpirationTime(token) {
   try {
-    const payload = token.split('.')[1];
-    if (!payload) return null;
-
-    const base64 = payload.replaceAll('-', '+').replaceAll('_', '/');
-    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
-    const expiration = Number(JSON.parse(atob(padded)).exp);
+    const expiration = Number(decodeJwtPayload(token).exp);
     return Number.isFinite(expiration) ? expiration * 1000 : null;
   } catch {
     return null;
   }
+}
+
+/** Reads the JWT lifetime without relying on the browser's wall clock. */
+export function jwtLifetimeMs(token) {
+  try {
+    const payload = decodeJwtPayload(token);
+    const issuedAt = Number(payload.iat);
+    const expiration = Number(payload.exp);
+    const lifetime = (expiration - issuedAt) * 1000;
+    return Number.isFinite(lifetime) && lifetime > 0 ? lifetime : null;
+  } catch {
+    return null;
+  }
+}
+
+function decodeJwtPayload(token) {
+  const payload = token.split('.')[1];
+  if (!payload) throw new Error('The JWT payload is missing.');
+
+  const base64 = payload.replaceAll('-', '+').replaceAll('_', '/');
+  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+  return JSON.parse(atob(padded));
 }
 
 /** Matches current structured SurrealDB auth failures and their wrapped causes. */

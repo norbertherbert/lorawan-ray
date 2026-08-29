@@ -1,149 +1,7 @@
-.hint {
-  margin: 10px 0 0;
-  color: var(--muted);
-  font-size: 0.75rem;
-}
-
-.google-signin {
-  display: grid;
-  justify-items: start;
-  gap: 14px;
-}
-
-.invitation-notice {
-  margin: 0;
-  padding: 10px 12px;
-  border-left: 3px solid var(--green);
-  color: #1f6343;
-  background: #e7f3eb;
-  font-size: 0.8rem;
-}
-
-#google-button {
-  width: min(100%, 360px);
-  min-height: 44px;
-  transition: opacity 150ms ease;
-}
-
-#google-button.is-busy {
-  pointer-events: none;
-  opacity: 0.55;
-}
-
-.pending-card,
-.admin-card {
-  margin-top: 0;
-}
-
-.pending-copy {
-  max-width: 650px;
-  margin: 0 0 24px;
-  color: var(--muted);
-  line-height: 1.65;
-}
-
-.secondary-button {
-  min-height: 38px;
-  padding: 8px 13px;
-  border: 1px solid var(--ink);
-  border-radius: 2px;
-  color: var(--ink);
-  background: var(--paper);
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.secondary-button:hover {
-  color: var(--paper);
-  background: var(--ink);
-}
-
-.secondary-button.danger-button:hover:not(:disabled) {
-  border-color: #9d321f;
-  background: #9d321f;
-}
-
-.secondary-button:disabled {
-  border-color: #c7c7c1;
-  color: #8c8b85;
-  background: #e9e8e2;
-  cursor: default;
-}
-
-.refresh-icon-button {
-  display: inline-grid;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  place-items: center;
-  border: 1px solid var(--ink);
-  border-radius: 50%;
-  color: var(--ink);
-  background: var(--paper);
-  font-family: 'DM Mono', monospace;
-  font-size: 0.68rem;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.refresh-icon-button:hover {
-  color: var(--paper);
-  background: var(--ink);
-}
-
-.refresh-icon-button svg {
-  width: 16px;
-  height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-}
-
-.refresh-icon-button.is-busy svg {
-  animation: spin 800ms linear infinite;
-}
-
-.pagination-icon-button {
-  display: inline-grid;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  place-items: center;
-  border: 1px solid var(--ink);
-  border-radius: 50%;
-  color: var(--ink);
-  background: var(--paper);
-}
-
-.pagination-icon-button:hover:not(:disabled) {
-  color: var(--paper);
-  background: var(--ink);
-}
-
-.pagination-icon-button:disabled {
-  border-color: #c7c7c1;
-  color: #aaa9a3;
-  background: #e9e8e2;
-  opacity: 1;
-}
-
-.pagination-icon-button svg {
-  width: 15px;
-  height: 15px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-}
-
 .admin-section + .admin-section {
-  margin-top: 38px;
-  padding-top: 34px;
-  border-top: 1px solid var(--line);
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #e5e7eb;
 }
 
 .admin-section-heading {
@@ -151,20 +9,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 18px;
-}
-
-.admin-section-heading h3 {
-  margin: 0 0 4px;
-  font-size: 1rem;
-}
-
-.admin-section-heading p,
-.admin-empty,
-.invite-result p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.78rem;
+  margin-bottom: 16px;
 }
 
 .registration-setting {
@@ -172,10 +17,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  min-height: 64px;
-  padding: 10px 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  padding: 16px 0;
 }
 
 .registration-setting strong,
@@ -183,72 +25,25 @@
   display: block;
 }
 
-.registration-setting strong {
-  font-size: 0.85rem;
-}
-
-.registration-setting span {
-  margin-top: 3px;
-  color: var(--muted);
-  font-size: 0.72rem;
-}
-
 .registration-setting > button {
   flex: 0 0 auto;
 }
 
 .invite-form {
-  --invite-control-height: 38px;
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) 145px auto;
+  grid-template-columns: minmax(220px, 1fr) 160px auto;
   align-items: end;
-  gap: 10px;
-}
-
-.invite-form input,
-.invite-form select,
-.invite-form button {
-  box-sizing: border-box;
-  height: var(--invite-control-height) !important;
-  min-height: var(--invite-control-height) !important;
-  max-height: var(--invite-control-height) !important;
-}
-
-.invite-form button,
-.copy-row button {
-  padding: 0 18px;
-  border: 1px solid var(--ink);
-  border-radius: 2px;
-  color: var(--paper);
-  background: var(--ink);
-  font-weight: 700;
-}
-
-.copy-row button {
-  min-height: 48px;
-}
-
-.invite-form button:hover,
-.copy-row button:hover {
-  background: var(--accent);
-}
-
-.invite-result {
-  margin-top: 18px;
-  padding: 16px;
-  border: 1px solid var(--green);
-  background: #eef8f1;
+  gap: 12px;
 }
 
 .copy-row {
   display: flex;
+  align-items: center;
   gap: 8px;
-  margin-top: 10px;
 }
 
-.copy-row input {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.72rem;
+.copy-row > div {
+  flex: 1 1 auto;
 }
 
 .admin-list {
@@ -262,13 +57,12 @@
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  min-height: 64px;
-  padding: 10px 0;
-  border-top: 1px solid var(--line);
+  padding: 12px 0;
+  border-top: 1px solid #e5e7eb;
 }
 
 .admin-list-item:last-child {
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .admin-list-item strong,
@@ -277,32 +71,17 @@
   overflow-wrap: anywhere;
 }
 
-.admin-list-item strong {
-  font-size: 0.85rem;
-}
-
 .admin-list-item span {
   margin-top: 3px;
-  color: var(--muted);
-  font-size: 0.72rem;
+  color: #6b7280;
+  font-size: 0.875rem;
 }
 
-.admin-empty {
-  padding: 18px 0 0;
+.dark .admin-section + .admin-section,
+.dark .admin-list-item {
+  border-color: #374151;
 }
 
-@media (max-width: 640px) {
-  .registration-setting {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-}
-
-.error-message {
-  margin: 24px 0 0;
-  padding: 14px 16px;
-  border-left: 4px solid #a33b25;
-  color: #7f2817;
-  background: #ffe8df;
-  font-size: 0.85rem;
+.dark .admin-list-item span {
+  color: #9ca3af;
 }

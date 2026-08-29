@@ -1,5 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { functionalUpdate, type RowSelectionState, type SortingState } from '@tanstack/react-table';
+import { Alert, Badge, Card, Label, Select, Tooltip } from 'flowbite-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { UplinkDataSource, UplinkFilters, UplinkPageRequest, UplinkSort } from '../api/types.ts';
 import FilterBuilder, { emptyFilterDraft, type FilterDraft } from '../components/FilterBuilder/FilterBuilder.tsx';
@@ -96,57 +97,62 @@ export default function Analyzer({ dataSource, sourceKey, sourceLabel, requireAc
   }
 
   return (
-    <section className="card analyzer-card" id="analyzer-card">
+    <Card className="analyzer-card" id="analyzer-card">
       <div className="analyzer-heading">
-        <div>
-          <h2>Packet analyzer</h2>
-        </div>
-        {sourceLabel ? <span className="analyzer-source is-mock">{sourceLabel}</span> : null}
+        <h2 className="text-base font-bold tracking-tight text-gray-900">Packet analyzer</h2>
+        {sourceLabel ? <Badge className="compact-heading-badge" color="warning" size="xs">{sourceLabel}</Badge> : null}
+        <FilterBuilder value={filterDraft} busy={packets.isFetching} onApply={applyFilters} />
       </div>
 
-      <FilterBuilder value={filterDraft} busy={packets.isFetching} onApply={applyFilters} />
-
       <nav className="analyzer-pagination" aria-label="Packet pages">
-        <label>
-          Rows
-          <select
+        <div className="analyzer-page-size">
+          <Label htmlFor="packet-page-size">Rows</Label>
+          <Select
+            sizing="sm"
+            id="packet-page-size"
             value={pageRequest.limit}
             onChange={(event) => resetPage(Number(event.target.value))}
             disabled={packets.isFetching}
           >
             {PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size}</option>)}
-          </select>
+          </Select>
           <span className="analyzer-result-count">{packets.data?.items.length ?? 0} packets</span>
-        </label>
-        <div>
-          <button
-            className="pagination-icon-button"
-            type="button"
-            onClick={goLater}
-            disabled={packets.isFetching || !packets.data?.pageInfo.hasPreviousPage}
-            title="Later"
-            aria-label="Later"
-          >
-            <UpArrowIcon />
-          </button>
-          <span>Page {-page}</span>
-          <button
-            className="pagination-icon-button"
-            type="button"
-            onClick={goEarlier}
-            disabled={packets.isFetching || !packets.data?.pageInfo.hasNextPage}
-            title="Earlier"
-            aria-label="Earlier"
-          >
-            <DownArrowIcon />
-          </button>
         </div>
-        <button className={`refresh-icon-button${packets.isFetching ? ' is-busy' : ''}`} type="button" onClick={refreshPackets} disabled={packets.isFetching} title="Refresh packets" aria-label="Refresh packets">
-          <RefreshIcon />
-        </button>
+        <div className="analyzer-page-navigation">
+          <Tooltip content="Later">
+            <button
+              className="icon-action"
+              type="button"
+              onClick={goLater}
+              disabled={packets.isFetching || !packets.data?.pageInfo.hasPreviousPage}
+              aria-label="Later"
+            >
+              <UpArrowIcon />
+            </button>
+          </Tooltip>
+          <span>Page {-page}</span>
+          <Tooltip content="Earlier">
+            <button
+              className="icon-action"
+              type="button"
+              onClick={goEarlier}
+              disabled={packets.isFetching || !packets.data?.pageInfo.hasNextPage}
+              aria-label="Earlier"
+            >
+              <DownArrowIcon />
+            </button>
+          </Tooltip>
+        </div>
+        <div className="analyzer-refresh">
+          <Tooltip content="Refresh packets">
+            <button className="icon-action" type="button" onClick={refreshPackets} disabled={packets.isFetching} aria-label="Refresh packets">
+              <span className={packets.isFetching ? 'animate-spin' : ''}><RefreshIcon /></span>
+            </button>
+          </Tooltip>
+        </div>
       </nav>
 
-      {packets.error ? <p className="analyzer-query-error" role="alert">Could not load packets: {packets.error.message}</p> : null}
+      {packets.error ? <Alert color="failure">Could not load packets: {packets.error.message}</Alert> : null}
       <div className="analyzer-workspace">
         <PacketTable
           data={packets.data?.items ?? []}
@@ -158,6 +164,6 @@ export default function Analyzer({ dataSource, sourceKey, sourceLabel, requireAc
         />
         <PacketDetails packet={details.data} loading={details.isFetching} error={details.error} />
       </div>
-    </section>
+    </Card>
   );
 }

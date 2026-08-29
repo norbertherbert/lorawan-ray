@@ -1,5 +1,12 @@
 import { parseTime } from '@internationalized/date';
-import { Badge, Button } from 'flowbite-react';
+import {
+  Alert,
+  Badge,
+  Button,
+  Label,
+  Select,
+  TextInput,
+} from 'flowbite-react';
 import { useEffect, useRef, useState } from 'react';
 import { DateInput, DateSegment, TimeField, type TimeValue } from 'react-aria-components';
 import type { UplinkFilters } from '../../api/types.ts';
@@ -47,6 +54,7 @@ interface FilterBuilderProps {
 
 export default function FilterBuilder({ value, busy, onApply }: FilterBuilderProps) {
   const [draft, setDraft] = useState(value);
+  const [expanded, setExpanded] = useState(false);
   const [validationError, setValidationError] = useState('');
   const activeCount = countActiveFilters(value);
 
@@ -75,48 +83,71 @@ export default function FilterBuilder({ value, busy, onApply }: FilterBuilderPro
   }
 
   return (
-    <details className="analyzer-filters">
-      <summary>
-        <span>Display filter</span>
-        <span className="analyzer-filter-state">
-          {activeCount ? <Badge color="warning">{activeCount} active</Badge> : 'No filters'}
-          <span aria-hidden="true">⌄</span>
-        </span>
-      </summary>
-      <form onSubmit={apply}>
-        <div className="analyzer-filter-grid">
-          <FilterField label="Search" value={draft.text} placeholder="Payload, address, MType…" onChange={(value) => update('text', value)} />
-          <DateTimeFilterField
-            label="Observed from"
-            date={draft.fromDate}
-            time={draft.fromTime}
-            onDateChange={(value) => update('fromDate', value)}
-            onTimeChange={(value) => update('fromTime', value)}
-          />
-          <DateTimeFilterField
-            label="Observed to"
-            date={draft.toDate}
-            time={draft.toTime}
-            onDateChange={(value) => update('toDate', value)}
-            onTimeChange={(value) => update('toTime', value)}
-          />
-          <FilterField label="DevEUI" value={draft.devEui} placeholder="70B3D57ED0001001" onChange={(value) => update('devEui', value)} />
-          <FilterField label="DevAddr" value={draft.devAddr} placeholder="26011ABC" onChange={(value) => update('devAddr', value)} />
-          <FilterField label="Gateway" value={draft.gatewayId} placeholder="647FDAFFFE005E17" onChange={(value) => update('gatewayId', value)} />
-          <FilterField label="FPort" value={draft.fPort} placeholder="1, 10, 100" inputMode="numeric" onChange={(value) => update('fPort', value)} />
-          <FilterSelect label="Modulation" value={draft.modulation} onChange={(value) => update('modulation', value)} />
-          <FilterField label="Data rate" value={draft.dataRate} placeholder="M0CW137, SF7BW125" onChange={(value) => update('dataRate', value)} />
-          <FilterField label="LoRa SF" value={draft.spreadingFactor} placeholder="7, 8, 12" inputMode="numeric" onChange={(value) => update('spreadingFactor', value)} />
-          <FilterField label="Minimum RSSI" value={draft.rssiMinimum} placeholder="-110" inputMode="decimal" onChange={(value) => update('rssiMinimum', value)} />
-          <FilterField label="Minimum SNR" value={draft.snrMinimum} placeholder="-10" inputMode="decimal" onChange={(value) => update('snrMinimum', value)} />
+    <>
+      <Button
+        className="analyzer-filter-toggle"
+        color="light"
+        size="xs"
+        type="button"
+        aria-controls="analyzer-filter-panel"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((current) => !current)}
+      >
+        <svg className="analyzer-filter-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 5h16l-6.5 7.2v5.3l-3 1.5v-6.8L4 5Z" />
+        </svg>
+        <span>Filters</span>
+        {activeCount ? (
+          <Badge className="analyzer-filter-status" color="warning" size="xs">{activeCount} active</Badge>
+        ) : (
+          <Badge className="analyzer-filter-status" color="gray" size="xs">No filters</Badge>
+        )}
+        <svg
+          className={`analyzer-filter-chevron${expanded ? ' is-expanded' : ''}`}
+          viewBox="0 0 20 20"
+          aria-hidden="true"
+        >
+          <path d="m5 7.5 5 5 5-5" />
+        </svg>
+      </Button>
+      {expanded ? (
+        <div className="analyzer-filter-panel" id="analyzer-filter-panel">
+          <form onSubmit={apply}>
+            <div className="analyzer-filter-grid">
+              <FilterField label="Search" value={draft.text} placeholder="Payload, address, MType…" onChange={(value) => update('text', value)} />
+              <DateTimeFilterField
+                label="Observed from"
+                date={draft.fromDate}
+                time={draft.fromTime}
+                onDateChange={(value) => update('fromDate', value)}
+                onTimeChange={(value) => update('fromTime', value)}
+              />
+              <DateTimeFilterField
+                label="Observed to"
+                date={draft.toDate}
+                time={draft.toTime}
+                onDateChange={(value) => update('toDate', value)}
+                onTimeChange={(value) => update('toTime', value)}
+              />
+              <FilterField label="DevEUI" value={draft.devEui} placeholder="70B3D57ED0001001" onChange={(value) => update('devEui', value)} />
+              <FilterField label="DevAddr" value={draft.devAddr} placeholder="26011ABC" onChange={(value) => update('devAddr', value)} />
+              <FilterField label="Gateway" value={draft.gatewayId} placeholder="647FDAFFFE005E17" onChange={(value) => update('gatewayId', value)} />
+              <FilterField label="FPort" value={draft.fPort} placeholder="1, 10, 100" inputMode="numeric" onChange={(value) => update('fPort', value)} />
+              <FilterSelect label="Modulation" value={draft.modulation} onChange={(value) => update('modulation', value)} />
+              <FilterField label="Data rate" value={draft.dataRate} placeholder="M0CW137, SF7BW125" onChange={(value) => update('dataRate', value)} />
+              <FilterField label="LoRa SF" value={draft.spreadingFactor} placeholder="7, 8, 12" inputMode="numeric" onChange={(value) => update('spreadingFactor', value)} />
+              <FilterField label="Minimum RSSI" value={draft.rssiMinimum} placeholder="-110" inputMode="decimal" onChange={(value) => update('rssiMinimum', value)} />
+              <FilterField label="Minimum SNR" value={draft.snrMinimum} placeholder="-10" inputMode="decimal" onChange={(value) => update('snrMinimum', value)} />
+              <div className="analyzer-filter-actions">
+                <Button color="light" size="xs" type="button" onClick={clear} disabled={busy}>Clear</Button>
+                <Button color="blue" size="xs" type="submit" disabled={busy}>Apply filter</Button>
+              </div>
+            </div>
+            {validationError ? <Alert className="mt-3" color="failure">{validationError}</Alert> : null}
+          </form>
         </div>
-        {validationError ? <p className="analyzer-filter-error" role="alert">{validationError}</p> : null}
-        <div className="analyzer-filter-actions">
-          <Button className="analyzer-filter-action filter-clear-action" color="alternative" size="xs" type="button" onClick={clear} disabled={busy}>Clear</Button>
-          <Button className="analyzer-filter-action filter-apply-action" color="dark" size="xs" type="submit" disabled={busy}>Apply filter</Button>
-        </div>
-      </form>
-    </details>
+      ) : null}
+    </>
   );
 }
 
@@ -130,9 +161,10 @@ interface FilterFieldProps {
 
 function FilterField({ label, value, placeholder, inputMode, onChange }: FilterFieldProps) {
   return (
-    <label>
-      <span>{label}</span>
-      <input
+    <div>
+      <div className="filter-field-label"><Label>{label}</Label></div>
+      <TextInput
+        sizing="sm"
         type="text"
         inputMode={inputMode}
         autoComplete="off"
@@ -140,7 +172,7 @@ function FilterField({ label, value, placeholder, inputMode, onChange }: FilterF
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
       />
-    </label>
+    </div>
   );
 }
 
@@ -171,10 +203,11 @@ function DateTimeFilterField({
 
   return (
     <div className="analyzer-filter-field">
-      <span>{label}</span>
+      <div className="filter-field-label"><Label>{label}</Label></div>
       <span className="analyzer-datetime-inputs">
         <span className="analyzer-date-input">
-          <input
+          <TextInput
+            sizing="sm"
             type="text"
             inputMode="numeric"
             autoComplete="off"
@@ -183,7 +216,12 @@ function DateTimeFilterField({
             placeholder="YYYY-MM-DD"
             onChange={(event) => onDateChange(event.target.value)}
           />
-          <button type="button" aria-label={`Pick ${label.toLowerCase()} date`} onClick={openDatePicker}>
+          <button
+            className="analyzer-date-picker-trigger"
+            type="button"
+            aria-label={`Pick ${label.toLowerCase()} date`}
+            onClick={openDatePicker}
+          >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M7 3v3m10-3v3M4.5 9h15M6 5h12a1.5 1.5 0 0 1 1.5 1.5v12A1.5 1.5 0 0 1 18 20H6a1.5 1.5 0 0 1-1.5-1.5v-12A1.5 1.5 0 0 1 6 5Z" />
             </svg>
@@ -218,15 +256,15 @@ function DateTimeFilterField({
 
 function FilterSelect({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
-    <label>
-      <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
+    <div>
+      <div className="filter-field-label"><Label>{label}</Label></div>
+      <Select sizing="sm" value={value} onChange={(event) => onChange(event.target.value)}>
         <option value="">Any modulation</option>
         <option value="LR-FHSS">LR-FHSS</option>
         <option value="LORA">LoRa</option>
         <option value="FSK">FSK</option>
-      </select>
-    </label>
+      </Select>
+    </div>
   );
 }
 

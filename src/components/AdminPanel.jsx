@@ -1,21 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Select, TextInput, ToggleSwitch } from 'flowbite-react';
+import { Alert, Button, Card, Label, Select, TextInput, ToggleSwitch } from 'flowbite-react';
 import { RefreshButton } from './Icons.jsx';
 import { formatDate } from '../lib.js';
-
-const compactInputStyle = {
-  height: '38px',
-  minHeight: '38px',
-  padding: '2px 8px',
-  borderRadius: '2px',
-  fontSize: '0.72rem',
-  lineHeight: 1.2,
-};
-
-const compactSelectStyle = {
-  ...compactInputStyle,
-  paddingRight: '28px',
-};
 
 export default function AdminPanel({
   registeredUsers,
@@ -78,30 +64,29 @@ export default function AdminPanel({
   }
 
   return (
-    <section className="card admin-card" id="admin-card">
-      <div className="section-heading">
-        <div>
-          <h2>Users &amp; invitations</h2>
-        </div>
-      </div>
+    <Card className="admin-card" id="admin-card">
+      <h2 className="text-xl font-bold tracking-tight text-gray-900">
+        Admin
+      </h2>
 
       <div className="admin-section">
         <div className="admin-section-heading">
           <div>
-            <h3>Self-registration</h3>
-            <p>Allow any user with a verified Google identity to register immediately.</p>
+            <h3 className="text-xl font-bold text-gray-900">Self-registration</h3>
+            <p className="text-sm text-gray-500">Allow any user with a verified Google identity to register immediately.</p>
           </div>
         </div>
         <div className="registration-setting">
           <div>
-            <strong>{selfRegistrationEnabled ? 'Enabled' : 'Disabled'}</strong>
-            <span>
+            <strong className="text-gray-900">{selfRegistrationEnabled ? 'Enabled' : 'Disabled'}</strong>
+            <span className="text-sm text-gray-500">
               {selfRegistrationEnabled
                 ? 'New users receive packet access immediately.'
                 : 'New users require approval or a valid invitation.'}
             </span>
           </div>
           <ToggleSwitch
+            sizing="sm"
             checked={selfRegistrationEnabled}
             disabled={activeAction === 'registration'}
             label={selfRegistrationEnabled ? 'Disable self-registration' : 'Enable self-registration'}
@@ -115,8 +100,8 @@ export default function AdminPanel({
       <div className="admin-section">
         <div className="admin-section-heading">
           <div>
-            <h3>Registered users</h3>
-            <p>Delete accounts that should no longer have access.</p>
+            <h3 className="text-xl font-bold text-gray-900">Registered users</h3>
+            <p className="text-sm text-gray-500">Delete accounts that should no longer have access.</p>
           </div>
         </div>
         <ul className="admin-list">
@@ -150,16 +135,14 @@ export default function AdminPanel({
             );
           })}
         </ul>
-        <p className="admin-empty" hidden={registeredUsers.length > 0}>
-          No registered users.
-        </p>
+        {!registeredUsers.length ? <Alert color="gray">No registered users.</Alert> : null}
       </div>
 
       <div className="admin-section">
         <div className="admin-section-heading">
           <div>
-            <h3>Pending registrations</h3>
-            <p>Approve Google users who requested access without an invitation.</p>
+            <h3 className="text-xl font-bold text-gray-900">Pending registrations</h3>
+            <p className="text-sm text-gray-500">Approve Google users who requested access without an invitation.</p>
           </div>
           <RefreshButton
             busy={refreshing}
@@ -184,27 +167,24 @@ export default function AdminPanel({
             );
           })}
         </ul>
-        <p className="admin-empty" hidden={pendingUsers.length > 0}>
-          No registrations are waiting.
-        </p>
+        {!pendingUsers.length ? <Alert color="gray">No registrations are waiting.</Alert> : null}
       </div>
 
       <div className="admin-section">
         <div className="admin-section-heading">
           <div>
-            <h3>Create invitation</h3>
-            <p>The link is single-use, email-bound, and expires automatically.</p>
+            <h3 className="text-xl font-bold text-gray-900">Create invitation</h3>
+            <p className="text-sm text-gray-500">The link is single-use, email-bound, and expires automatically.</p>
           </div>
         </div>
         <form className="invite-form" onSubmit={createInvitation}>
           <div>
-            <label htmlFor="invite-email">Google email address</label>
+            <div className="mb-2 block"><Label htmlFor="invite-email">Google email address</Label></div>
             <TextInput
+              sizing="sm"
               id="invite-email"
               name="email"
               type="email"
-              sizing="sm"
-              style={compactInputStyle}
               autoComplete="off"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
@@ -212,12 +192,11 @@ export default function AdminPanel({
             />
           </div>
           <div>
-            <label htmlFor="invite-expiry">Expires after</label>
+            <div className="mb-2 block"><Label htmlFor="invite-expiry">Expires after</Label></div>
             <Select
+              sizing="sm"
               id="invite-expiry"
               name="expiry"
-              sizing="sm"
-              style={compactSelectStyle}
               value={expiry}
               onChange={(event) => setExpiry(event.target.value)}
             >
@@ -226,33 +205,36 @@ export default function AdminPanel({
               <option value="30">30 days</option>
             </Select>
           </div>
-          <button type="submit" disabled={creating}>
+          <Button size="xs" type="submit" disabled={creating}>
             {creating ? 'Creating…' : 'Create invitation'}
-          </button>
+          </Button>
         </form>
 
-        <div className="invite-result" hidden={!invitationLink}>
-          <p>This link is shown only once. Copy it before leaving this page.</p>
-          <div className="copy-row">
-            <input
+        {invitationLink ? (
+          <Alert color="success">
+            <p className="mb-2">This link is shown only once. Copy it before leaving this page.</p>
+            <div className="copy-row">
+            <TextInput
+              sizing="sm"
               ref={invitationLinkRef}
               type="text"
               readOnly
               aria-label="Invitation link"
               value={invitationLink}
             />
-            <button type="button" onClick={copyInvitation}>
+            <Button size="xs" type="button" onClick={copyInvitation}>
               {copyLabel}
-            </button>
-          </div>
-        </div>
+            </Button>
+            </div>
+          </Alert>
+        ) : null}
       </div>
 
       <div className="admin-section">
         <div className="admin-section-heading">
           <div>
-            <h3>Active invitations</h3>
-            <p>Invitation tokens are stored only as hashes and cannot be recovered.</p>
+            <h3 className="text-xl font-bold text-gray-900">Active invitations</h3>
+            <p className="text-sm text-gray-500">Invitation tokens are stored only as hashes and cannot be recovered.</p>
           </div>
         </div>
         <ul className="admin-list">
@@ -270,11 +252,9 @@ export default function AdminPanel({
             );
           })}
         </ul>
-        <p className="admin-empty" hidden={activeInvitations.length > 0}>
-          No active invitations.
-        </p>
+        {!activeInvitations.length ? <Alert color="gray">No active invitations.</Alert> : null}
       </div>
-    </section>
+    </Card>
   );
 }
 
@@ -285,14 +265,15 @@ function AdminListItem({ title, detail, actionLabel, danger = false, disabled, o
         <strong>{title}</strong>
         <span>{detail}</span>
       </div>
-      <button
-        className={`secondary-button${danger ? ' danger-button' : ''}`}
+      <Button
+        color={danger ? 'red' : 'light'}
+        size="xs"
         type="button"
         disabled={disabled}
         onClick={onAction}
       >
         {actionLabel}
-      </button>
+      </Button>
     </li>
   );
 }

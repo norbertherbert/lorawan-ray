@@ -2,24 +2,6 @@
   .shell.analyzer-shell {
     height: auto;
     min-height: 100dvh;
-    overflow: visible;
-  }
-
-  .hero {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .session-actions {
-    width: 100%;
-  }
-
-  .analyzer-filter-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .analyzer-card {
-    display: block;
   }
 
   .analyzer-workspace {
@@ -31,7 +13,7 @@
   }
 
   .packet-details {
-    margin-top: 9px;
+    margin-top: 16px;
     overflow: visible;
   }
 
@@ -45,33 +27,46 @@
     overflow-y: visible;
     scrollbar-gutter: auto;
   }
+}
 
+@media (max-width: 767px) {
+  .app-navbar {
+    height: auto;
+  }
+
+  .app-navbar > div {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .app-nav-tabs {
+    width: 100%;
+  }
 }
 
 @media (max-width: 640px) {
-  .shell {
-    padding: 42px 0;
+
+  .session-actions {
+    width: auto;
   }
 
-  .analyzer-shell .hero {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 10px;
+  .analyzer-datetime-inputs {
+    grid-template-columns: 108px minmax(0, 1fr);
   }
 
-  .analyzer-shell .session-actions {
+  .analyzer-date-input {
     width: 100%;
   }
 
-  .analyzer-filter-grid {
-    grid-template-columns: 1fr;
+  .shell {
+    padding: 24px 0 0;
   }
 
   .analyzer-pagination {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .analyzer-pagination > div {
+  .analyzer-page-navigation {
     grid-column: 1 / -1;
     grid-row: 2;
     justify-content: space-between;
@@ -91,12 +86,9 @@
 
   .copy-row,
   .admin-section-heading,
-  .admin-list-item {
+  .admin-list-item,
+  .registration-setting {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .copy-row button {
-    min-height: 48px;
   }
 }

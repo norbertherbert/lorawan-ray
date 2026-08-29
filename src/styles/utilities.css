@@ -14,15 +14,3 @@
   display: none !important;
 }
 
-@keyframes pulse {
-  to {
-    opacity: 0.35;
-  }
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-

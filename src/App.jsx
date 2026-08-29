@@ -1,5 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import {
+  Alert,
+  Button,
+  Card,
+  Dropdown,
+  DropdownItem,
+  Navbar,
+  NavbarBrand,
+  NavbarCollapse,
+  NavbarLink,
+  NavbarToggle,
+} from 'flowbite-react';
 import { Surreal, Table } from 'surrealdb';
 import AdminPanel from './components/AdminPanel.jsx';
 import {
@@ -10,6 +22,7 @@ import {
   hashInvitationToken,
   isSessionAuthenticationError,
   jwtExpirationTime,
+  jwtLifetimeMs,
   loadGoogleIdentityScript,
 } from './lib.js';
 import { mockUplinkDataSource } from './api/mockUplinks.ts';
@@ -17,6 +30,23 @@ import { SurrealUplinkDataSource } from './api/surrealUplinks.ts';
 import Analyzer from './pages/Analyzer.tsx';
 
 const useMockData = import.meta.env.VITE_USE_MOCK_DATA === 'true';
+
+function initialDarkMode() {
+  try {
+    const savedTheme = window.localStorage.getItem('lorawan-ray-theme');
+    if (savedTheme === 'dark' || savedTheme === 'light') {
+      const dark = savedTheme === 'dark';
+      document.documentElement.classList.toggle('dark', dark);
+      return dark;
+    }
+  } catch {
+    // Fall back to the operating-system preference when storage is unavailable.
+  }
+
+  const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  document.documentElement.classList.toggle('dark', dark);
+  return dark;
+}
 
 const config = {
   endpoint:
@@ -35,7 +65,7 @@ const initialInvitation = consumeInvitationFragment();
 
 export default function App() {
   const queryClient = useQueryClient();
-  const [status, setStatus] = useState({ state: 'offline', text: 'Not connected' });
+  const [, setStatus] = useState({ state: 'offline', text: 'Not connected' });
   const [error, setError] = useState(
     initialInvitation.invalid
       ? 'This invitation link is malformed. Ask the administrator for a new link.'
@@ -53,6 +83,7 @@ export default function App() {
   const [approvalBusy, setApprovalBusy] = useState(false);
   const [adminRefreshing, setAdminRefreshing] = useState(false);
   const [logoutBusy, setLogoutBusy] = useState(false);
+  const [darkMode, setDarkMode] = useState(initialDarkMode);
   const googleButtonRef = useRef(null);
   const authenticationHandlerRef = useRef(null);
   const sessionExpiresAtRef = useRef(null);
@@ -61,6 +92,15 @@ export default function App() {
 
   const approved = currentProfile?.approved === true;
   const isAdmin = approved && currentProfile?.is_admin === true;
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+    try {
+      window.localStorage.setItem('lorawan-ray-theme', darkMode ? 'dark' : 'light');
+    } catch {
+      // The selected theme still applies for this page session.
+    }
+  }, [darkMode]);
 
   function clearError() {
     setError('');
@@ -111,10 +151,13 @@ export default function App() {
 
   function scheduleSessionExpiry(token, advertisedExpiration) {
     clearSessionExpiry();
+    const lifetime = jwtLifetimeMs(token);
     const advertisedExpiresAt = Date.parse(advertisedExpiration || '');
-    const expiresAt = Number.isFinite(advertisedExpiresAt)
-      ? advertisedExpiresAt
-      : jwtExpirationTime(token);
+    const expiresAt = lifetime !== null
+      ? Date.now() + lifetime
+      : Number.isFinite(advertisedExpiresAt)
+        ? advertisedExpiresAt
+        : jwtExpirationTime(token);
     if (expiresAt === null) return;
 
     sessionExpiresAtRef.current = expiresAt;
@@ -330,10 +373,14 @@ export default function App() {
     }
   }
 
-  async function toggleAdminPanel() {
-    const opening = !adminOpen;
-    setAdminOpen(opening);
-    if (opening) await loadAdminData();
+  function showAnalyzer() {
+    setAdminOpen(false);
+  }
+
+  async function showAdminPanel() {
+    if (adminOpen) return;
+    setAdminOpen(true);
+    await loadAdminData();
   }
 
   async function approveUser(user) {
@@ -417,50 +464,70 @@ export default function App() {
 
   return (
     <>
-      <main className={`shell${approved && !adminOpen ? ' analyzer-shell' : ''}`}>
-        <header className="hero">
-          <div className="brand">
-            <h1>LoRaWAN Ray</h1>
-            <img
-              className="brand-mark"
-              src={`${import.meta.env.BASE_URL}lorawan-ray-mark.png`}
-              alt=""
-              aria-hidden="true"
-            />
-          </div>
-          <div className="session-actions">
-            <div className="status" data-state={status.state}>
-              <span className="status-dot" aria-hidden="true" />
-              <span>{status.text}</span>
-            </div>
-            <button
-              className="admin-toggle-button"
-              type="button"
-              aria-controls="admin-card"
-              aria-expanded={adminOpen}
-              onClick={toggleAdminPanel}
-              hidden={!isAdmin}
+      <Navbar fluid border className="app-navbar">
+        <NavbarBrand as="div" className="brand">
+          <h1>LoRaWAN Ray</h1>
+          <img
+            className="brand-mark"
+            src={`${import.meta.env.BASE_URL}lorawan-ray-mark.png`}
+            alt=""
+            aria-hidden="true"
+          />
+        </NavbarBrand>
+        <div className="session-actions">
+          {approved ? <NavbarToggle /> : null}
+          {currentProfile ? (
+            <Dropdown
+              inline
+              label={(
+                <span className="user-menu-label">
+                  {currentProfile.name || signedInUser?.name || currentProfile.email || signedInUser?.email || 'Account'}
+                </span>
+              )}
+              placement="bottom-end"
             >
-              <span>{adminOpen ? 'Close admin' : 'Users & invitations'}</span>
-            </button>
-            <button
-              className="logout-button"
-              type="button"
-              onClick={logout}
-              disabled={logoutBusy}
-              hidden={!currentProfile}
-            >
-              <span>{logoutBusy ? 'Logging out…' : 'Logout'}</span>
-            </button>
-          </div>
-        </header>
+              <DropdownItem onClick={logout} disabled={logoutBusy}>
+                {logoutBusy ? 'Logging out…' : 'Logout'}
+              </DropdownItem>
+            </Dropdown>
+          ) : null}
+          <button
+            className="theme-toggle"
+            type="button"
+            aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            onClick={() => setDarkMode((current) => !current)}
+          >
+            {darkMode ? (
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="4" />
+                <path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M20.2 15.1A8.5 8.5 0 0 1 8.9 3.8 8.5 8.5 0 1 0 20.2 15.1Z" />
+              </svg>
+            )}
+          </button>
+        </div>
+        {approved ? (
+          <NavbarCollapse className="app-nav-tabs">
+            <NavbarLink as="button" active={!adminOpen} onClick={showAnalyzer}>
+              Analyzer
+            </NavbarLink>
+            {isAdmin ? (
+              <NavbarLink as="button" active={adminOpen} onClick={showAdminPanel}>
+                Admin
+              </NavbarLink>
+            ) : null}
+          </NavbarCollapse>
+        ) : null}
+      </Navbar>
 
-        <section className="card connection-card" hidden={Boolean(currentProfile)}>
-          <div className="section-heading">
-            <div>
-              <h2>Sign in</h2>
-            </div>
-          </div>
+      <main className={`shell${approved && !adminOpen ? ' analyzer-shell' : ''}`}>
+
+        <Card className="connection-card" hidden={Boolean(currentProfile)}>
+          <h2 className="text-lg font-bold tracking-tight text-gray-900">Sign in</h2>
 
           <div className="google-signin">
             <div
@@ -469,37 +536,35 @@ export default function App() {
               className={googleBusy ? 'is-busy' : ''}
               aria-label="Sign in with Google"
             />
-            <p className="invitation-notice" hidden={!invitationToken}>
-              Invitation detected. Sign in with the invited Google account to accept it.
-            </p>
-            <p className="hint">
+            {invitationToken ? (
+              <Alert color="success">
+                Invitation detected. Sign in with the invited Google account to accept it.
+              </Alert>
+            ) : null}
+            <p className="text-sm text-gray-500">
               Google verifies your identity. A short-lived token grants approved, read-only
               access; no database password is sent to this page.
             </p>
           </div>
-        </section>
+        </Card>
 
-        <section className="card pending-card" hidden={!currentProfile || approved}>
-          <div className="section-heading">
-            <div>
-              <h2>Awaiting approval</h2>
-            </div>
-            <span className="number">02</span>
-          </div>
-          <p className="pending-copy">
+        <Card className="pending-card" hidden={!currentProfile || approved}>
+          <h2 className="text-2xl font-bold tracking-tight text-gray-900">Awaiting approval</h2>
+          <p className="text-gray-500">
             Your Google account <strong>{currentProfile?.email || signedInUser?.email || ''}</strong>{' '}
             is registered, but an administrator must approve it before gateway receptions become
             available.
           </p>
-          <button
-            className="secondary-button"
+          <Button
+            color="light"
+            size="xs"
             type="button"
             onClick={checkApproval}
             disabled={approvalBusy}
           >
             {approvalBusy ? 'Checking…' : 'Check approval'}
-          </button>
-        </section>
+          </Button>
+        </Card>
 
         {approved && !adminOpen ? (
           <Analyzer
@@ -529,9 +594,7 @@ export default function App() {
           />
         ) : null}
 
-        <p className="error-message" role="alert" hidden={!error}>
-          {error}
-        </p>
+        {error ? <Alert className="mt-4" color="failure">{error}</Alert> : null}
       </main>
 
     </>
