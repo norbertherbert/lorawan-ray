@@ -158,19 +158,19 @@ export default function FilterBuilder({
         <svg className="analyzer-filter-icon" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 5h16l-6.5 7.2v5.3l-3 1.5v-6.8L4 5Z" />
         </svg>
-        <span>Filter:</span>
+        <span className="analyzer-filter-toggle-label">Filter:</span>
         {draft.filterType === 'per' ? (
-          <Badge className="active-filter-label" color="purple" size="xs">PER</Badge>
+          <Badge className="active-filter-label filter-per-label" color="purple" size="xs">PER</Badge>
         ) : null}
         {savedFilterIsModified ? (
-          <Badge className="active-filter-label" color="warning" size="xs">Unsaved</Badge>
+          <Badge className="active-filter-label filter-unsaved-label" color="warning" size="xs">Unsaved</Badge>
         ) : null}
         {activeFilterName ? (
-          <Badge className="active-filter-label" color="success" size="xs">{activeFilterName}</Badge>
+          <Badge className="active-filter-label filter-name-label" color="success" size="xs">{activeFilterName}</Badge>
         ) : hasCriteria ? (
-          <Badge className="active-filter-label" color="warning" size="xs">Unsaved</Badge>
+          <Badge className="active-filter-label filter-unsaved-label" color="warning" size="xs">Unsaved</Badge>
         ) : (
-          <Badge className="active-filter-label" color="gray" size="xs">Empty</Badge>
+          <Badge className="active-filter-label filter-empty-label" color="gray" size="xs">Empty</Badge>
         )}
         <svg
           className={`analyzer-filter-chevron${expanded ? ' is-expanded' : ''}`}
@@ -184,9 +184,17 @@ export default function FilterBuilder({
         <div className="analyzer-filter-panel" id="analyzer-filter-panel">
           <form onSubmit={apply}>
             <div className="analyzer-filter-menu">
-              <Button color="dark" size="xs" type="button" onClick={clear} disabled={busy}>Clear</Button>
-              <Button className="filter-apply-control" color="dark" size="xs" type="submit" disabled={busy || !hasUnappliedChanges}>Apply</Button>
-              <Dropdown color="dark" size="xs" type="button" label="File" placement="bottom-start" disabled={busy}>
+              <Button color="default" outline size="xs" type="button" onClick={clear} disabled={busy}>Clear</Button>
+              <Button
+                color={hasUnappliedChanges ? 'red' : 'default'}
+                outline={!hasUnappliedChanges}
+                size="xs"
+                type="submit"
+                disabled={busy || !hasUnappliedChanges}
+              >
+                Apply
+              </Button>
+              <Dropdown color="default" outline size="xs" type="button" label="File" placement="bottom-start" disabled={busy}>
                 <DropdownItem className="filter-file-menu-item" onClick={onOpenSavedFilters} disabled={busy}>Open</DropdownItem>
                 <DropdownItem
                   className="filter-file-menu-item"
@@ -210,17 +218,20 @@ export default function FilterBuilder({
                   Save as…
                 </DropdownItem>
               </Dropdown>
-              <Select
+              <Dropdown
                 className="analyzer-filter-type"
                 aria-label="Filter type"
-                sizing="sm"
-                value={draft.filterType}
+                color="default"
+                outline
+                size="xs"
+                type="button"
+                label={draft.filterType === 'per' ? 'Packet Error Rate filter' : 'Normal filter'}
+                placement="bottom-start"
                 disabled={busy}
-                onChange={(event) => changeFilterType(event.target.value as SavedFilterType)}
               >
-                <option value="sniffer">Normal filter</option>
-                <option value="per">Packet Error Rate filter</option>
-              </Select>
+                <DropdownItem onClick={() => changeFilterType('sniffer')}>Normal filter</DropdownItem>
+                <DropdownItem onClick={() => changeFilterType('per')}>Packet Error Rate filter</DropdownItem>
+              </Dropdown>
             </div>
             <div className="analyzer-filter-grid">
               {draft.filterType === 'sniffer' ? (
