@@ -11,6 +11,7 @@ import type {
   GatewayReception,
   Modulation,
   NumericRange,
+  PacketErrorRateResult,
   UplinkDataSource,
   UplinkDetails,
   UplinkFilters,
@@ -21,6 +22,7 @@ import type {
   UplinkSummary,
 } from './types.ts';
 import { UplinkDataSourceError } from './types.ts';
+import { calculatePacketErrorRate } from './packetErrorRate.ts';
 import type {
   DecodedLoRaWANFrame,
   LoRaWANMajor,
@@ -142,6 +144,37 @@ export class SurrealUplinkDataSource implements UplinkDataSource {
         hasNextPage: built.backwards ? Boolean(request.page.before) : hasExtra,
       },
     };
+  }
+
+  async calculatePacketErrorRate(
+    filters: UplinkFilters,
+    options: DataSourceOptions = {},
+  ): Promise<PacketErrorRateResult | null> {
+    throwIfAborted(options.signal);
+    validateRequest({ page: { limit: 1 }, filters });
+    const predicates = ['fcnt16 IS NOT NONE'];
+    const variables: Record<string, unknown> = {};
+    appendFilters(predicates, variables, filters);
+    const [values] = await abortable(
+      this.#db
+        .query(
+          `SELECT VALUE fcnt16 FROM lorawan_uplink WHERE ${predicates.join(' AND ')};`,
+          variables,
+        )
+        .json()
+        .collect<[unknown[]]>(),
+      options.signal,
+    );
+    throwIfAborted(options.signal);
+
+    if (!Array.isArray(values)) invalidResponse('The PER query did not return a counter array.');
+    const frameCounters = values.map((value) => {
+      if (typeof value !== 'number' || !Number.isInteger(value)) {
+        invalidResponse('The PER query returned an invalid frame counter.');
+      }
+      return value;
+    });
+    return calculatePacketErrorRate(frameCounters, filters.packet?.fCnt);
   }
 
   async getById(id: string, options: DataSourceOptions = {}): Promise<UplinkDetails> {

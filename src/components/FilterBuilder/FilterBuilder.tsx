@@ -65,6 +65,9 @@ interface FilterBuilderProps {
   activeFilterName?: string;
   activeFilterModified?: boolean;
   canSave: boolean;
+  packetErrorRate?: number | null;
+  packetErrorRatePending?: boolean;
+  packetErrorRateFailed?: boolean;
   onApply: (draft: FilterDraft, filters: UplinkFilters | undefined) => void;
   onOpenSavedFilters: () => void;
   onSaveAs: (draft: FilterDraft, filters: UplinkFilters | undefined) => void;
@@ -79,6 +82,9 @@ export default function FilterBuilder({
   activeFilterName,
   activeFilterModified,
   canSave,
+  packetErrorRate,
+  packetErrorRatePending,
+  packetErrorRateFailed,
   onApply,
   onOpenSavedFilters,
   onSaveAs,
@@ -184,6 +190,17 @@ export default function FilterBuilder({
         <div className="analyzer-filter-panel" id="analyzer-filter-panel">
           <form onSubmit={apply}>
             <div className="analyzer-filter-menu">
+              {draft.filterType === 'per' && !hasUnappliedChanges && (
+                packetErrorRatePending || packetErrorRateFailed || packetErrorRate !== undefined
+              ) ? (
+                <span className="packet-error-rate-result">
+                  {packetErrorRatePending
+                    ? 'Packet Error Rate: calculating…'
+                    : packetErrorRateFailed || typeof packetErrorRate !== 'number'
+                      ? 'Packet Error Rate: unavailable'
+                      : `Packet Error Rate: ${packetErrorRate.toFixed(2)} %`}
+                </span>
+              ) : null}
               <Button color="default" outline size="xs" type="button" onClick={clear} disabled={busy}>Clear</Button>
               <Button
                 color={hasUnappliedChanges ? 'red' : 'default'}

@@ -77,6 +77,12 @@ export default function Analyzer({
     queryFn: ({ signal }) => dataSource.search(searchRequest, { signal }),
     placeholderData: keepPreviousData,
   });
+  const appliedPerFilters = filterDraft.filterType === 'per' ? filters : undefined;
+  const packetErrorRate = useQuery({
+    queryKey: ['packet-error-rate', sourceKey, appliedPerFilters],
+    queryFn: ({ signal }) => dataSource.calculatePacketErrorRate(appliedPerFilters!, { signal }),
+    enabled: Boolean(appliedPerFilters),
+  });
   const selectedId = Object.keys(rowSelection)[0];
   const details = useQuery({
     queryKey: ['uplink', sourceKey, selectedId],
@@ -294,6 +300,9 @@ export default function Analyzer({
           activeFilterName={activeSavedFilter?.name}
           activeFilterModified={activeFilterModified}
           canSave={Boolean(activeSavedFilter && ownsActiveFilter)}
+          packetErrorRate={packetErrorRate.data?.percentage ?? (packetErrorRate.data === null ? null : undefined)}
+          packetErrorRatePending={packetErrorRate.isPending && packetErrorRate.isFetching}
+          packetErrorRateFailed={packetErrorRate.isError}
           onApply={applyFilters}
           onOpenSavedFilters={() => {
             setSavedFilterNotice('');

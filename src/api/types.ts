@@ -153,9 +153,22 @@ export interface DataSourceOptions {
   signal?: AbortSignal;
 }
 
+export interface PacketErrorRateResult {
+  percentage: number;
+  received: number;
+  expected: number;
+  missing: number;
+  firstFCnt: number;
+  lastFCnt: number;
+}
+
 export interface UplinkDataSource {
   search(request: UplinkSearchRequest, options?: DataSourceOptions): Promise<UplinkPage>;
   getById(id: string, options?: DataSourceOptions): Promise<UplinkDetails>;
+  calculatePacketErrorRate(
+    filters: UplinkFilters,
+    options?: DataSourceOptions,
+  ): Promise<PacketErrorRateResult | null>;
 }
 
 export type UplinkDataSourceErrorCode =

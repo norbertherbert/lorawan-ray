@@ -3,6 +3,7 @@ import type {
   DataSourceOptions,
   GatewayReception,
   NumericRange,
+  PacketErrorRateResult,
   PacketFilters,
   ReceptionFilters,
   UplinkDataSource,
@@ -15,6 +16,7 @@ import type {
   UplinkSummary,
 } from './types.ts';
 import { UplinkDataSourceError } from './types.ts';
+import { calculatePacketErrorRate } from './packetErrorRate.ts';
 
 const MAX_PAGE_SIZE = 250;
 const DEFAULT_SORTING: readonly UplinkSort[] = [{ field: 'observedAt', direction: 'desc' }];
@@ -71,6 +73,19 @@ export class MockUplinkDataSource implements UplinkDataSource {
     };
   }
 
+  async calculatePacketErrorRate(
+    filters: UplinkFilters,
+    options: DataSourceOptions = {},
+  ): Promise<PacketErrorRateResult | null> {
+    throwIfAborted(options.signal);
+    validateRequest({ page: { limit: 1 }, filters });
+    const frameCounters = this.#records
+      .filter((record) => matchesFilters(record, filters))
+      .flatMap((record) => record.fCnt === null ? [] : [record.fCnt]);
+    throwIfAborted(options.signal);
+    return calculatePacketErrorRate(frameCounters, filters.packet?.fCnt);
+  }
+
   async getById(id: string, options: DataSourceOptions = {}): Promise<UplinkDetails> {
     throwIfAborted(options.signal);
     const record = this.#records.find((candidate) => candidate.id === id);
@@ -117,6 +132,7 @@ function validateFilters(filters?: UplinkFilters): void {
   validateRange(filters?.reception?.frequencyMHz, 'frequency');
   validateRange(filters?.reception?.rssiDbm, 'RSSI');
   validateRange(filters?.reception?.snrDb, 'SNR');
+  validateRange(filters?.packet?.fCnt, 'FCnt');
 
   if (filters?.packet?.fPorts?.some((value) => !Number.isInteger(value) || value < 0 || value > 255)) {
     throw new UplinkDataSourceError('invalid_request', 'FPort values must be integers from 0 to 255.');
@@ -169,6 +185,7 @@ function matchesPacketFilters(record: UplinkDetails, filters?: PacketFilters): b
   if (filters.to && observedAt > Date.parse(filters.to)) return false;
   if (filters.devEuis?.length && !matchesHex(filters.devEuis, record.devEui)) return false;
   if (filters.devAddrs?.length && !matchesHex(filters.devAddrs, record.devAddr)) return false;
+  if (!matchesRange(record.fCnt, filters.fCnt)) return false;
   if (filters.fPorts?.length && (record.fPort === null || !filters.fPorts.includes(record.fPort))) {
     return false;
   }
