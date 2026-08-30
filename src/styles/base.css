@@ -217,8 +217,7 @@ body {
 
 .connection-card,
 .pending-card,
-.admin-card,
-.per-card {
+.admin-card {
   width: 100%;
   margin-bottom: 0;
 }
@@ -226,7 +225,6 @@ body {
 .connection-card,
 .pending-card,
 .admin-card,
-.per-card,
 .analyzer-card {
   border: 0;
 }

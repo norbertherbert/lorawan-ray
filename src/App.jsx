@@ -29,7 +29,6 @@ import { mockUplinkDataSource } from './api/mockUplinks.ts';
 import { SurrealUplinkDataSource } from './api/surrealUplinks.ts';
 import { SurrealSavedFilterDataSource } from './api/savedFilters.ts';
 import Analyzer from './pages/Analyzer.tsx';
-import PacketErrorRate from './pages/PacketErrorRate.tsx';
 
 const useMockData = import.meta.env.VITE_USE_MOCK_DATA === 'true';
 
@@ -82,7 +81,6 @@ export default function App() {
   const [activeInvitations, setActiveInvitations] = useState([]);
   const [selfRegistrationEnabled, setSelfRegistrationEnabled] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
-  const [perOpen, setPerOpen] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [approvalBusy, setApprovalBusy] = useState(false);
   const [adminRefreshing, setAdminRefreshing] = useState(false);
@@ -396,17 +394,10 @@ export default function App() {
 
   function showAnalyzer() {
     setAdminOpen(false);
-    setPerOpen(false);
-  }
-
-  function showPacketErrorRate() {
-    setAdminOpen(false);
-    setPerOpen(true);
   }
 
   async function showAdminPanel() {
-    if (adminOpen && !perOpen) return;
-    setPerOpen(false);
+    if (adminOpen) return;
     setAdminOpen(true);
     await loadAdminData();
   }
@@ -540,11 +531,8 @@ export default function App() {
         </div>
         {approved ? (
           <NavbarCollapse className="app-nav-tabs">
-            <NavbarLink as="button" active={!adminOpen && !perOpen} onClick={showAnalyzer}>
+            <NavbarLink as="button" active={!adminOpen} onClick={showAnalyzer}>
               Sniffer
-            </NavbarLink>
-            <NavbarLink as="button" active={perOpen} onClick={showPacketErrorRate}>
-              PER
             </NavbarLink>
             {isAdmin ? (
               <NavbarLink as="button" active={adminOpen} onClick={showAdminPanel}>
@@ -555,7 +543,7 @@ export default function App() {
         ) : null}
       </Navbar>
 
-      <main className={`shell${approved && !adminOpen && !perOpen ? ' analyzer-shell' : ''}`}>
+      <main className={`shell${approved && !adminOpen ? ' analyzer-shell' : ''}`}>
 
         <Card className="connection-card" hidden={Boolean(currentProfile)}>
           <h2 className="text-lg font-bold tracking-tight text-gray-900">Sign in</h2>
@@ -597,7 +585,7 @@ export default function App() {
           </Button>
         </Card>
 
-        {approved && !adminOpen && !perOpen ? (
+        {approved && !adminOpen ? (
           <Analyzer
             dataSource={analyzerDataSource}
             sourceKey={`${config.uplinkSource}-v1`}
@@ -608,8 +596,6 @@ export default function App() {
             onDatabaseError={handleDatabaseError}
           />
         ) : null}
-
-        {approved && perOpen ? <PacketErrorRate /> : null}
 
         {isAdmin && adminOpen ? (
           <AdminPanel
