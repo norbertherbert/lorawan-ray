@@ -10,6 +10,7 @@ test('builds a parameterized normalized-table query from structured filters', ()
       packet: {
         from: '2026-08-27T10:00:00Z',
         devAddrs: ['04:03:06:a0'],
+        fCnt: { minimum: 100, maximum: 200 },
         fPorts: [1, 10],
         modulations: ['LR-FHSS'],
         dataRates: ['M0CW137'],
@@ -28,6 +29,8 @@ test('builds a parameterized normalized-table query from structured filters', ()
   assert.match(built.text, /ORDER BY __sort_0 DESC, __sort_1 DESC, __record_key DESC/);
   assert.doesNotMatch(built.text, /040306A0|647FDAFFFE005E17/);
   assert.deepEqual(built.variables.dev_addrs, ['040306A0']);
+  assert.equal(built.variables.fcnt_minimum, 100);
+  assert.equal(built.variables.fcnt_maximum, 200);
   assert.deepEqual(built.variables.gateway_ids, ['647FDAFFFE005E17']);
   assert.deepEqual(built.variables.modulations, ['LR-FHSS']);
   assert.deepEqual(built.variables.data_rates, ['M0CW137']);

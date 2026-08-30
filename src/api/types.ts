@@ -82,6 +82,7 @@ export interface PacketFilters {
   to?: string;
   devEuis?: string[];
   devAddrs?: string[];
+  fCnt?: NumericRange;
   fPorts?: number[];
   mTypes?: LoRaWANMessageType[];
   modulations?: Modulation[];

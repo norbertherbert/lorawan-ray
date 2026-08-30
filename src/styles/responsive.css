@@ -73,11 +73,23 @@
     justify-self: stretch;
   }
 
-  .analyzer-filter-actions,
   .analyzer-heading,
   .packet-details-heading {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .analyzer-filter-toggle {
+    margin-left: 0;
+  }
+
+  .saved-filter-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .saved-filter-actions {
+    flex-wrap: wrap;
   }
 
   .invite-form {

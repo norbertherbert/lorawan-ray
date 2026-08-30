@@ -79,6 +79,11 @@ packet-table permissions: approved Google users may select logical uplinks and
 receptions, while gateway-specific creation is preserved and browser users
 cannot create, update, or delete packet records.
 
+When upgrading an existing database that already has the authentication
+schema, run [`surreal/saved_filters.surql`](surreal/saved_filters.surql) as a
+database owner. It adds saved Sniffer and PER dataset filters without touching
+the Google access definition or any private authentication values.
+
 ## Registration and invitations
 
 - A first-time Google user without an invitation is registered as `approved: false` and sees an

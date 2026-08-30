@@ -265,6 +265,7 @@ function appendFilters(
     predicates.push('dev_addr IN $dev_addrs');
     variables.dev_addrs = packet.devAddrs.map(normalizeHex);
   }
+  appendRange(predicates, variables, 'fcnt16', 'fcnt', packet?.fCnt);
   if (packet?.fPorts?.length) {
     predicates.push('fport IN $fports');
     variables.fports = packet.fPorts;
@@ -359,6 +360,14 @@ function validateRequest(request: UplinkSearchRequest): void {
   validateRange(request.filters?.reception?.frequencyMHz, 'frequency');
   validateRange(request.filters?.reception?.rssiDbm, 'RSSI');
   validateRange(request.filters?.reception?.snrDb, 'SNR');
+  validateRange(request.filters?.packet?.fCnt, 'FCnt');
+  if (
+    request.filters?.packet?.fCnt &&
+    [request.filters.packet.fCnt.minimum, request.filters.packet.fCnt.maximum]
+      .some((value) => value !== undefined && (!Number.isInteger(value) || value < 0 || value > 4_294_967_295))
+  ) {
+    throw new UplinkDataSourceError('invalid_request', 'FCnt bounds must be integers from 0 to 4294967295.');
+  }
   if (request.filters?.packet?.fPorts?.some((value) => !Number.isInteger(value) || value < 0 || value > 255)) {
     throw new UplinkDataSourceError('invalid_request', 'FPort values must be integers from 0 to 255.');
   }

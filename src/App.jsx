@@ -27,6 +27,7 @@ import {
 } from './lib.js';
 import { mockUplinkDataSource } from './api/mockUplinks.ts';
 import { SurrealUplinkDataSource } from './api/surrealUplinks.ts';
+import { SurrealSavedFilterDataSource } from './api/savedFilters.ts';
 import Analyzer from './pages/Analyzer.tsx';
 import PacketErrorRate from './pages/PacketErrorRate.tsx';
 
@@ -60,6 +61,7 @@ const config = {
 
 const db = new Surreal();
 const surrealUplinkDataSource = new SurrealUplinkDataSource(db);
+const savedFilterDataSource = new SurrealSavedFilterDataSource(db);
 const analyzerDataSource = config.uplinkSource === 'surreal' ? surrealUplinkDataSource : mockUplinkDataSource;
 const invitations = new Table('invitation');
 const initialInvitation = consumeInvitationFragment();
@@ -141,6 +143,7 @@ export default function App() {
   function resetAuthenticatedState() {
     queryClient.removeQueries({ queryKey: ['uplinks'] });
     queryClient.removeQueries({ queryKey: ['uplink'] });
+    queryClient.removeQueries({ queryKey: ['saved-filters'] });
     clearSessionExpiry();
     setSignedInUser(null);
     setCurrentProfile(null);
@@ -599,6 +602,8 @@ export default function App() {
             dataSource={analyzerDataSource}
             sourceKey={`${config.uplinkSource}-v1`}
             sourceLabel={config.uplinkSource === 'mock' ? 'Mock data' : undefined}
+            savedFilterDataSource={savedFilterDataSource}
+            currentUserId={currentProfile.id.toString()}
             requireActiveSession={requireActiveSession}
             onDatabaseError={handleDatabaseError}
           />
