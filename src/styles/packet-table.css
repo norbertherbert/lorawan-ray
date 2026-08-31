@@ -138,6 +138,76 @@
   border-color: #48727b;
 }
 
+.table-filter-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+}
+
+.table-filter-button {
+  display: inline-grid;
+  flex: 0 0 auto;
+  margin-left: auto;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  place-items: center;
+}
+
+.table-filter-tooltip-target {
+  display: inline-flex;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.table-filter-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 1px;
+  margin-left: auto;
+}
+
+.table-filter-actions .table-filter-button {
+  margin-left: 0;
+}
+
+.table-filter-actions .table-filter-tooltip-target {
+  margin-left: 0;
+}
+
+.table-filter-button:hover,
+.table-filter-button:focus-visible {
+  color: inherit;
+  background: #e5e7eb;
+}
+
+.table-filter-button:focus-visible {
+  outline: 1px solid #1a56db;
+  outline-offset: 1px;
+}
+
+.table-filter-button svg {
+  width: 13px;
+  height: 13px;
+}
+
+.packet-grid tbody tr[data-selected] .table-filter-button {
+  color: inherit;
+}
+
+.packet-grid tbody tr[data-selected] .table-filter-button:hover,
+.packet-grid tbody tr[data-selected] .table-filter-button:focus-visible {
+  color: inherit;
+  background: #48727b;
+}
+
 .packet-grid-empty {
   padding: 28px 15px;
   color: var(--muted);
@@ -180,4 +250,14 @@
 
 .dark .packet-grid tbody tr[data-selected] {
   background: #2d5963;
+}
+
+.dark .table-filter-button {
+  color: inherit;
+}
+
+.dark .table-filter-button:hover,
+.dark .table-filter-button:focus-visible {
+  color: inherit;
+  background: #4b5563;
 }

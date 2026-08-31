@@ -484,7 +484,7 @@ export default function App() {
   return (
     <>
       <Navbar fluid border className="app-navbar">
-        <NavbarBrand as="div" className="brand">
+        <NavbarBrand as="a" className="brand" href={import.meta.env.BASE_URL}>
           <h1>LoRaWAN Ray</h1>
           <img
             className="brand-mark"
@@ -560,10 +560,6 @@ export default function App() {
                 Invitation detected. Sign in with the invited Google account to accept it.
               </Alert>
             ) : null}
-            <p className="text-sm text-gray-500">
-              Google verifies your identity. A short-lived token grants approved, read-only
-              access; no database password is sent to this page.
-            </p>
           </div>
         </Card>
 

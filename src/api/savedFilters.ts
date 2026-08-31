@@ -14,6 +14,7 @@ export interface PerSavedFilterDefinition {
   type: 'per';
   version: 1;
   devAddr: string;
+  gatewayId?: string;
   observedFrom?: string;
   observedTo?: string;
   fCntFrom?: number;
@@ -131,10 +132,14 @@ export function createSavedFilterDefinition(
   const devAddrs = packet?.devAddrs ?? [];
   if (devAddrs.length !== 1) throw new Error('A PER dataset filter requires exactly one Device Address.');
   const devAddr = normalizeDevAddr(devAddrs[0]);
+  const gatewayIds = filters?.reception?.gatewayIds ?? [];
+  if (gatewayIds.length > 1) throw new Error('A PER dataset filter accepts at most one Gateway ID.');
+  const gatewayId = gatewayIds[0] === undefined ? undefined : normalizeGatewayId(gatewayIds[0]);
   return compactObject({
     type,
     version: 1 as const,
     devAddr,
+    gatewayId,
     observedFrom: packet?.from,
     observedTo: packet?.to,
     fCntFrom: packet?.fCnt?.minimum,
@@ -147,7 +152,7 @@ export function savedFilterDefinitionToFilters(definition: SavedFilterDefinition
   if (parsed.type === 'sniffer') {
     return Object.keys(parsed.filters).length ? cloneFilters(parsed.filters) : undefined;
   }
-  return {
+  return compactObject({
     packet: compactObject({
       devAddrs: [parsed.devAddr],
       from: parsed.observedFrom,
@@ -156,7 +161,8 @@ export function savedFilterDefinitionToFilters(definition: SavedFilterDefinition
         ? undefined
         : compactObject({ minimum: parsed.fCntFrom, maximum: parsed.fCntTo }),
     }),
-  };
+    reception: parsed.gatewayId === undefined ? undefined : { gatewayIds: [parsed.gatewayId] },
+  });
 }
 
 export function savedFilterDefinitionSignature(definition: SavedFilterDefinition): string {
@@ -225,6 +231,9 @@ function parseSavedFilterDefinition(value: unknown): SavedFilterDefinition {
   }
   if (value.type === 'per') {
     const devAddr = normalizeDevAddr(requiredString(value.devAddr, 'PER Device Address'));
+    const gatewayId = value.gatewayId === undefined
+      ? undefined
+      : normalizeGatewayId(requiredString(value.gatewayId, 'PER Gateway ID'));
     const observedFrom = optionalTimestamp(value.observedFrom, 'PER start time');
     const observedTo = optionalTimestamp(value.observedTo, 'PER end time');
     const fCntFrom = optionalFcnt(value.fCntFrom, 'PER start FCnt');
@@ -235,7 +244,7 @@ function parseSavedFilterDefinition(value: unknown): SavedFilterDefinition {
     if (fCntFrom !== undefined && fCntTo !== undefined && fCntFrom > fCntTo) {
       throw new Error('The PER start FCnt must not exceed its end FCnt.');
     }
-    return compactObject({ type: 'per' as const, version: 1 as const, devAddr, observedFrom, observedTo, fCntFrom, fCntTo });
+    return compactObject({ type: 'per' as const, version: 1 as const, devAddr, gatewayId, observedFrom, observedTo, fCntFrom, fCntTo });
   }
   throw new Error('Unsupported saved-filter type.');
 }
@@ -343,6 +352,12 @@ function requiredString(value: unknown, label: string): string {
 function normalizeDevAddr(value: string): string {
   const normalized = value.replace(/[:\s-]/g, '').toUpperCase();
   if (!/^[0-9A-F]{8}$/.test(normalized)) throw new Error('Device Address must contain exactly 8 hexadecimal digits.');
+  return normalized;
+}
+
+function normalizeGatewayId(value: string): string {
+  const normalized = value.replace(/[:\s-]/g, '').toUpperCase();
+  if (!/^[0-9A-F]{16}$/.test(normalized)) throw new Error('Gateway ID must contain exactly 16 hexadecimal digits.');
   return normalized;
 }
 

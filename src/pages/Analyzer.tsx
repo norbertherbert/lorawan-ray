@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { functionalUpdate, type RowSelectionState, type SortingState } from '@tanstack/react-table';
 import { Alert, Badge, Card, Label, Select, Tooltip } from 'flowbite-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { UplinkDataSource, UplinkFilters, UplinkPageRequest, UplinkSort } from '../api/types.ts';
 import {
   createSavedFilterDefinition,
@@ -17,6 +17,7 @@ import {
 import FilterBuilder, {
   emptyFilterDraft,
   filterDraftFromSavedDefinition,
+  type FilterPrefill,
   type FilterDraft,
 } from '../components/FilterBuilder/FilterBuilder.tsx';
 import PacketDetails from '../components/PacketDetails/PacketDetails.tsx';
@@ -53,6 +54,7 @@ export default function Analyzer({
   const [filters, setFilters] = useState<UplinkFilters | undefined>();
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [savedFiltersOpen, setSavedFiltersOpen] = useState(false);
+  const [savedFiltersMode, setSavedFiltersMode] = useState<'open' | 'edit'>('open');
   const [saveAsOpen, setSaveAsOpen] = useState(false);
   const [savedFilterError, setSavedFilterError] = useState('');
   const [savedFilterNotice, setSavedFilterNotice] = useState('');
@@ -61,6 +63,8 @@ export default function Analyzer({
   const [savingFilter, setSavingFilter] = useState(false);
   const [activeSavedFilter, setActiveSavedFilter] = useState<SavedFilter | null>(null);
   const [hasUnappliedDraft, setHasUnappliedDraft] = useState(false);
+  const [filterExpanded, setFilterExpanded] = useState(false);
+  const [filterPrefill, setFilterPrefill] = useState<FilterPrefill | null>(null);
   const initialSavedFilterLoaded = useRef(false);
   const reportedSearchError = useRef<unknown>(null);
   const reportedDetailsError = useRef<unknown>(null);
@@ -106,6 +110,38 @@ export default function Analyzer({
       savedFilterDefinitionSignature(activeSavedFilter.definition) !== savedFilterDefinitionSignature(appliedDefinition)),
   );
   const ownsActiveFilter = activeSavedFilter?.ownerId === currentUserId;
+  const prefillFilterField = useCallback((field: 'devAddr' | 'gatewayId', value: string) => {
+    setFilterPrefill((current) => ({
+      kind: 'field',
+      field,
+      value,
+      revision: (current?.revision ?? 0) + 1,
+    }));
+  }, []);
+  const prefillDevAddr = useCallback(
+    (value: string) => prefillFilterField('devAddr', value),
+    [prefillFilterField],
+  );
+  const prefillGatewayId = useCallback(
+    (value: string) => prefillFilterField('gatewayId', value),
+    [prefillFilterField],
+  );
+  const prefillTimestamp = useCallback((target: 'start' | 'end', value: string) => {
+    setFilterPrefill((current) => ({
+      kind: 'timestamp',
+      target,
+      value,
+      revision: (current?.revision ?? 0) + 1,
+    }));
+  }, []);
+  const prefillStartTime = useCallback(
+    (value: string) => prefillTimestamp('start', value),
+    [prefillTimestamp],
+  );
+  const prefillEndTime = useCallback(
+    (value: string) => prefillTimestamp('end', value),
+    [prefillTimestamp],
+  );
 
   useEffect(() => {
     if (packets.error && packets.error !== reportedSearchError.current) {
@@ -169,6 +205,7 @@ export default function Analyzer({
       setFilters(nextFilters);
       setActiveSavedFilter(filter);
       setHasUnappliedDraft(false);
+      setFilterExpanded(true);
       setRowSelection({});
       resetPage();
       setSavedFiltersOpen(false);
@@ -296,16 +333,22 @@ export default function Analyzer({
         {sourceLabel ? <Badge className="compact-heading-badge" color="warning" size="xs">{sourceLabel}</Badge> : null}
         <FilterBuilder
           value={filterDraft}
+          expanded={filterExpanded}
           busy={packets.isFetching || savingFilter}
           activeFilterName={activeSavedFilter?.name}
           activeFilterModified={activeFilterModified}
           canSave={Boolean(activeSavedFilter && ownsActiveFilter)}
           packetErrorRate={packetErrorRate.data?.percentage ?? (packetErrorRate.data === null ? null : undefined)}
-          packetErrorRatePending={packetErrorRate.isPending && packetErrorRate.isFetching}
-          packetErrorRateFailed={packetErrorRate.isError}
+          filterPrefill={filterPrefill}
           onApply={applyFilters}
           onOpenSavedFilters={() => {
             setSavedFilterNotice('');
+            setSavedFiltersMode('open');
+            setSavedFiltersOpen(true);
+          }}
+          onEditSavedFilters={() => {
+            setSavedFilterNotice('');
+            setSavedFiltersMode('edit');
             setSavedFiltersOpen(true);
           }}
           onSaveAs={() => {
@@ -324,6 +367,7 @@ export default function Analyzer({
             setSavedFilterLocation(null);
           }}
           onDraftDirtyChange={setHasUnappliedDraft}
+          onExpandedChange={setFilterExpanded}
         />
       </div>
 
@@ -384,6 +428,11 @@ export default function Analyzer({
           sorting={sorting}
           rowSelection={rowSelection}
           loading={packets.isFetching}
+          showFilterActions={filterExpanded}
+          onFilterByDevAddr={prefillDevAddr}
+          onFilterByGatewayId={prefillGatewayId}
+          onFilterStartTime={prefillStartTime}
+          onFilterEndTime={prefillEndTime}
           onSortingChange={changeSorting}
           onRowSelectionChange={(updater) => setRowSelection((current) => functionalUpdate(updater, current))}
         />
@@ -392,12 +441,12 @@ export default function Analyzer({
 
       <SavedFiltersModal
         open={savedFiltersOpen}
+        mode={savedFiltersMode}
         filters={savedFilters.data ?? []}
         loading={savedFilters.isFetching}
         busyId={savedFilterBusyId}
         error={savedFilterError}
         notice={savedFilterNotice}
-        initialType={filterDraft.filterType}
         currentUserId={currentUserId}
         onClose={() => setSavedFiltersOpen(false)}
         onRefresh={() => void savedFilters.refetch()}

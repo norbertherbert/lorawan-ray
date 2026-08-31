@@ -7,9 +7,17 @@ import {
   ModalBody,
   ModalFooter,
   ModalHeader,
+  Pagination,
   Select,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeadCell,
+  TableRow,
   Textarea,
   TextInput,
+  Tooltip,
 } from 'flowbite-react';
 import { useEffect, useMemo, useState } from 'react';
 import type {
@@ -17,15 +25,17 @@ import type {
   SavedFilterType,
   SavedFilterVisibility,
 } from '../../api/savedFilters.ts';
+import { FolderOpenIcon, LinkIcon, RefreshButton, TrashIcon } from '../Icons.jsx';
+import { formatDate } from '../../lib.js';
 
 interface SavedFiltersModalProps {
   open: boolean;
+  mode: 'open' | 'edit';
   filters: SavedFilter[];
   loading: boolean;
   busyId?: string;
   error?: string;
   notice?: string;
-  initialType: SavedFilterType;
   currentUserId: string;
   onClose: () => void;
   onRefresh: () => void;
@@ -36,12 +46,12 @@ interface SavedFiltersModalProps {
 
 export function SavedFiltersModal({
   open,
+  mode,
   filters,
   loading,
   busyId,
   error,
   notice,
-  initialType,
   currentUserId,
   onClose,
   onRefresh,
@@ -49,78 +59,229 @@ export function SavedFiltersModal({
   onCopyLink,
   onDelete,
 }: SavedFiltersModalProps) {
-  const [selectedType, setSelectedType] = useState<SavedFilterType>('sniffer');
+  const [search, setSearch] = useState('');
+  const [selectedType, setSelectedType] = useState<'all' | SavedFilterType>('all');
+  const [selectedScope, setSelectedScope] = useState<'mine' | 'shared'>('mine');
+  const [page, setPage] = useState(1);
+
   useEffect(() => {
-    if (open) setSelectedType(initialType);
-  }, [open, initialType]);
+    if (!open) return;
+    setSearch('');
+    setSelectedType('all');
+    setSelectedScope('mine');
+    setPage(1);
+  }, [open]);
+
   const visibleFilters = useMemo(
-    () => filters.filter((filter) => filter.definition.type === selectedType),
-    [filters, selectedType],
+    () => {
+      const term = search.trim().toLocaleLowerCase();
+      return filters.filter((filter) => {
+        const owned = filter.ownerId === currentUserId;
+        if (selectedScope === 'mine' ? !owned : owned || filter.visibility !== 'shared') return false;
+        if (selectedType !== 'all' && filter.definition.type !== selectedType) return false;
+        if (!term) return true;
+        return [
+          filter.name,
+          filter.description ?? '',
+          filter.ownerName,
+        ].some((value) => value.toLocaleLowerCase().includes(term));
+      });
+    },
+    [currentUserId, filters, search, selectedScope, selectedType],
   );
+  const totalPages = Math.max(1, Math.ceil(visibleFilters.length / SAVED_FILTERS_PER_PAGE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedFilters = visibleFilters.slice(
+    (currentPage - 1) * SAVED_FILTERS_PER_PAGE,
+    currentPage * SAVED_FILTERS_PER_PAGE,
+  );
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
+
+  function changeSearch(value: string) {
+    setSearch(value);
+    setPage(1);
+  }
+
+  function changeType(value: 'all' | SavedFilterType) {
+    setSelectedType(value);
+    setPage(1);
+  }
+
+  function changeScope(value: 'mine' | 'shared') {
+    setSelectedScope(value);
+    setPage(1);
+  }
 
   return (
     <Modal dismissible show={open} size="5xl" onClose={onClose}>
-      <ModalHeader>Saved filters</ModalHeader>
-      <ModalBody>
+      <div className="saved-filters-modal-layout">
+        <ModalHeader>Saved filters</ModalHeader>
+        <ModalBody className="saved-filters-modal-body">
         <div className="saved-filter-toolbar">
-          <div className="saved-filter-tabs" role="tablist" aria-label="Saved filter type">
-            <Button color={selectedType === 'sniffer' ? 'blue' : 'light'} size="xs" type="button" onClick={() => setSelectedType('sniffer')}>
-              Sniffer filters
+          <label className="saved-filter-toolbar-field saved-filter-search">
+            <span>Search</span>
+            <TextInput
+              sizing="sm"
+              type="search"
+              placeholder="Name, description, owner…"
+              value={search}
+              onChange={(event) => changeSearch(event.target.value)}
+            />
+          </label>
+          <label className="saved-filter-toolbar-field saved-filter-type">
+            <span>Type</span>
+            <Select
+              sizing="sm"
+              value={selectedType}
+              onChange={(event) => changeType(event.target.value as 'all' | SavedFilterType)}
+            >
+              <option value="all">All</option>
+              <option value="sniffer">Normal</option>
+              <option value="per">PER</option>
+            </Select>
+          </label>
+          <div className="saved-filter-scope" role="group" aria-label="Filter ownership">
+            <Button color={selectedScope === 'mine' ? 'blue' : 'light'} size="xs" type="button" onClick={() => changeScope('mine')}>
+              My filters
             </Button>
-            <Button color={selectedType === 'per' ? 'blue' : 'light'} size="xs" type="button" onClick={() => setSelectedType('per')}>
-              PER filters
+            <Button color={selectedScope === 'shared' ? 'blue' : 'light'} size="xs" type="button" onClick={() => changeScope('shared')}>
+              Shared with me
             </Button>
           </div>
-          <Button color="light" size="xs" type="button" onClick={onRefresh} disabled={loading}>Refresh</Button>
+          <RefreshButton
+            busy={loading}
+            label="saved filters"
+            tooltipClassName="compact-icon-tooltip"
+            tooltipLabel="Refresh"
+            onClick={onRefresh}
+          />
         </div>
 
         {error ? <Alert color="failure">{error}</Alert> : null}
         {notice ? <Alert color="success">{notice}</Alert> : null}
         {loading && !filters.length ? <p className="saved-filter-empty">Loading saved filters…</p> : null}
-        {!loading && !visibleFilters.length ? (
-          <p className="saved-filter-empty">No {selectedType === 'per' ? 'PER' : 'Sniffer'} filters are available.</p>
+        {!loading && !visibleFilters.length ? <p className="saved-filter-empty">No matching filters are available.</p> : null}
+
+        {visibleFilters.length ? (
+          <div className="saved-filter-table-wrap">
+            <Table className="saved-filter-table">
+              <TableHead>
+                <TableRow>
+                  <TableHeadCell>Name</TableHeadCell>
+                  <TableHeadCell>Type</TableHeadCell>
+                  <TableHeadCell>{selectedScope === 'mine' ? 'Visibility' : 'Owner'}</TableHeadCell>
+                  <TableHeadCell>Updated</TableHeadCell>
+                  <TableHeadCell><span className="sr-only">Actions</span></TableHeadCell>
+                </TableRow>
+              </TableHead>
+              <TableBody className="divide-y">
+                {pagedFilters.map((filter) => {
+                  const owned = filter.ownerId === currentUserId;
+                  const busy = busyId === filter.id;
+                  return (
+                    <TableRow key={filter.id}>
+                      <TableCell className="saved-filter-name-cell">
+                        <strong>{filter.name}</strong>
+                        {filter.description ? <small title={filter.description}>{filter.description}</small> : null}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className="saved-filter-table-badge" color={filter.definition.type === 'per' ? 'purple' : 'info'} size="xs">
+                          {filter.definition.type === 'per' ? 'PER' : 'Normal'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {selectedScope === 'mine' ? (
+                          <Badge className="saved-filter-table-badge" color={filter.visibility === 'shared' ? 'success' : 'gray'} size="xs">
+                            {filter.visibility === 'shared' ? 'Shared' : 'Private'}
+                          </Badge>
+                        ) : filter.ownerName}
+                      </TableCell>
+                      <TableCell className="saved-filter-updated-cell">{formatDate(filter.updatedAt).slice(0, 16)}</TableCell>
+                      <TableCell>
+                        <div className="saved-filter-actions">
+                          {mode === 'open' ? (
+                            <SavedFilterAction label="Open" onClick={() => onOpen(filter)} disabled={busy}>
+                              <FolderOpenIcon />
+                            </SavedFilterAction>
+                          ) : (
+                            <>
+                              {filter.visibility === 'shared' ? (
+                                <SavedFilterAction label="Copy link" onClick={() => onCopyLink(filter)} disabled={busy}>
+                                  <LinkIcon />
+                                </SavedFilterAction>
+                              ) : null}
+                              {owned ? (
+                                <SavedFilterAction
+                                  danger
+                                  label="Delete"
+                                  onClick={() => onDelete(filter)}
+                                  disabled={busy}
+                                >
+                                  <TrashIcon />
+                                </SavedFilterAction>
+                              ) : null}
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         ) : null}
 
-        <div className="saved-filter-list">
-          {visibleFilters.map((filter) => {
-            const owned = filter.ownerId === currentUserId;
-            const busy = busyId === filter.id;
-            return (
-              <article className="saved-filter-row" key={filter.id}>
-                <div className="saved-filter-summary">
-                  <div className="saved-filter-title-row">
-                    <strong>{filter.name}</strong>
-                    <Badge color={filter.definition.type === 'per' ? 'purple' : 'info'} size="xs">
-                      {filter.definition.type === 'per' ? 'PER' : 'Sniffer'}
-                    </Badge>
-                    <Badge color={filter.visibility === 'shared' ? 'success' : 'gray'} size="xs">
-                      {filter.visibility === 'shared' ? 'Shared' : 'Private'}
-                    </Badge>
-                  </div>
-                  <span>{filterSummary(filter)}</span>
-                  <small>
-                    {owned ? 'You' : filter.ownerName} · updated {formatDateTime(filter.updatedAt)}
-                  </small>
-                  {filter.description ? <p>{filter.description}</p> : null}
-                </div>
-                <div className="saved-filter-actions">
-                  <Button color="blue" size="xs" type="button" onClick={() => onOpen(filter)} disabled={busy}>Open</Button>
-                  <Button color="light" size="xs" type="button" onClick={() => onCopyLink(filter)} disabled={busy}>Copy link</Button>
-                  {owned ? (
-                    <Button color="failure" size="xs" type="button" onClick={() => onDelete(filter)} disabled={busy}>
-                      {busy ? 'Deleting…' : 'Delete'}
-                    </Button>
-                  ) : null}
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      </ModalBody>
-      <ModalFooter>
-        <Button color="light" size="sm" type="button" onClick={onClose}>Close</Button>
-      </ModalFooter>
+        {visibleFilters.length ? (
+          <div className="saved-filter-pagination">
+            <span>
+              {(currentPage - 1) * SAVED_FILTERS_PER_PAGE + 1}–{Math.min(currentPage * SAVED_FILTERS_PER_PAGE, visibleFilters.length)} of {visibleFilters.length} filters
+            </span>
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              showIcons
+              previousLabel="Previous"
+              nextLabel="Next"
+            />
+          </div>
+        ) : null}
+        </ModalBody>
+        <ModalFooter className="saved-filters-modal-footer">
+          <Button color="light" size="xs" type="button" onClick={onClose}>Close</Button>
+        </ModalFooter>
+      </div>
     </Modal>
+  );
+}
+
+const SAVED_FILTERS_PER_PAGE = 10;
+
+interface SavedFilterActionProps {
+  label: string;
+  disabled?: boolean;
+  danger?: boolean;
+  children: React.ReactNode;
+  onClick: () => void;
+}
+
+function SavedFilterAction({ label, disabled, danger, children, onClick }: SavedFilterActionProps) {
+  return (
+    <Tooltip className="compact-icon-tooltip" content={label}>
+      <button
+        className={`icon-action${danger ? ' saved-filter-delete-action' : ''}`}
+        type="button"
+        aria-label={label}
+        disabled={disabled}
+        onClick={onClick}
+      >
+        {children}
+      </button>
+    </Tooltip>
   );
 }
 
@@ -202,27 +363,4 @@ export function SaveFilterModal({ open, filterType, busy, error, onClose, onSave
       </form>
     </Modal>
   );
-}
-
-function filterSummary(filter: SavedFilter): string {
-  const definition = filter.definition;
-  if (definition.type === 'per') {
-    const parts = [`Device ${definition.devAddr}`];
-    if (definition.fCntFrom !== undefined || definition.fCntTo !== undefined) {
-      parts.push(`FCnt ${definition.fCntFrom ?? '…'}–${definition.fCntTo ?? '…'}`);
-    }
-    if (definition.observedFrom || definition.observedTo) parts.push('time range set');
-    return parts.join(' · ');
-  }
-  const packetCount = Object.keys(definition.filters.packet ?? {}).length;
-  const receptionCount = Object.keys(definition.filters.reception ?? {}).length;
-  const count = packetCount + receptionCount;
-  return count ? `${count} active filter ${count === 1 ? 'group' : 'groups'}` : 'No filtering criteria';
-}
-
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
 }

@@ -61,39 +61,46 @@ const EMPTY_FILTERS: FilterDraft = {
 
 interface FilterBuilderProps {
   value: FilterDraft;
+  expanded: boolean;
   busy: boolean;
   activeFilterName?: string;
   activeFilterModified?: boolean;
   canSave: boolean;
   packetErrorRate?: number | null;
-  packetErrorRatePending?: boolean;
-  packetErrorRateFailed?: boolean;
+  filterPrefill?: FilterPrefill | null;
   onApply: (draft: FilterDraft, filters: UplinkFilters | undefined) => void;
   onOpenSavedFilters: () => void;
+  onEditSavedFilters: () => void;
   onSaveAs: (draft: FilterDraft, filters: UplinkFilters | undefined) => void;
   onSave: (draft: FilterDraft, filters: UplinkFilters | undefined) => void;
   onCloseSavedFilter: () => void;
   onDraftDirtyChange: (dirty: boolean) => void;
+  onExpandedChange: (expanded: boolean) => void;
 }
+
+export type FilterPrefill =
+  | { kind: 'field'; field: 'devAddr' | 'gatewayId'; value: string; revision: number }
+  | { kind: 'timestamp'; target: 'start' | 'end'; value: string; revision: number };
 
 export default function FilterBuilder({
   value,
+  expanded,
   busy,
   activeFilterName,
   activeFilterModified,
   canSave,
   packetErrorRate,
-  packetErrorRatePending,
-  packetErrorRateFailed,
+  filterPrefill,
   onApply,
   onOpenSavedFilters,
+  onEditSavedFilters,
   onSaveAs,
   onSave,
   onCloseSavedFilter,
   onDraftDirtyChange,
+  onExpandedChange,
 }: FilterBuilderProps) {
   const [draft, setDraft] = useState(value);
-  const [expanded, setExpanded] = useState(false);
   const [validationError, setValidationError] = useState('');
   const hasUnappliedChanges = JSON.stringify(draft) !== JSON.stringify(value);
   const hasCriteria = hasFilterCriteria(draft) || hasFilterCriteria(value);
@@ -101,6 +108,19 @@ export default function FilterBuilder({
   const savedFilterIsModified = hasOpenSavedFilter && Boolean(activeFilterModified || hasUnappliedChanges);
 
   useEffect(() => setDraft(value), [value]);
+  useEffect(() => {
+    if (!filterPrefill) return;
+    if (filterPrefill.kind === 'field') {
+      setDraft((current) => ({ ...current, [filterPrefill.field]: filterPrefill.value }));
+    } else {
+      const timestamp = splitTimestampForDraft(filterPrefill.value);
+      setDraft((current) => filterPrefill.target === 'start'
+        ? { ...current, fromDate: timestamp.date, fromTime: timestamp.time }
+        : { ...current, toDate: timestamp.date, toTime: timestamp.time });
+    }
+    setValidationError('');
+    onExpandedChange(true);
+  }, [filterPrefill, onExpandedChange]);
   useEffect(() => onDraftDirtyChange(hasUnappliedChanges), [hasUnappliedChanges, onDraftDirtyChange]);
 
   function update(field: keyof FilterDraft, nextValue: string) {
@@ -159,14 +179,16 @@ export default function FilterBuilder({
         type="button"
         aria-controls="analyzer-filter-panel"
         aria-expanded={expanded}
-        onClick={() => setExpanded((current) => !current)}
+        onClick={() => onExpandedChange(!expanded)}
       >
         <svg className="analyzer-filter-icon" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 5h16l-6.5 7.2v5.3l-3 1.5v-6.8L4 5Z" />
         </svg>
         <span className="analyzer-filter-toggle-label">Filter:</span>
-        {draft.filterType === 'per' ? (
-          <Badge className="active-filter-label filter-per-label" color="purple" size="xs">PER</Badge>
+        {draft.filterType === 'per' && !hasUnappliedChanges && typeof packetErrorRate === 'number' ? (
+          <Badge className="active-filter-label filter-per-label" color="purple" size="xs">
+            PER: {packetErrorRate.toFixed(2)}%
+          </Badge>
         ) : null}
         {savedFilterIsModified ? (
           <Badge className="active-filter-label filter-unsaved-label" color="warning" size="xs">Unsaved</Badge>
@@ -190,17 +212,6 @@ export default function FilterBuilder({
         <div className="analyzer-filter-panel" id="analyzer-filter-panel">
           <form onSubmit={apply}>
             <div className="analyzer-filter-menu">
-              {draft.filterType === 'per' && !hasUnappliedChanges && (
-                packetErrorRatePending || packetErrorRateFailed || packetErrorRate !== undefined
-              ) ? (
-                <span className="packet-error-rate-result">
-                  {packetErrorRatePending
-                    ? 'Packet Error Rate: calculating…'
-                    : packetErrorRateFailed || typeof packetErrorRate !== 'number'
-                      ? 'Packet Error Rate: unavailable'
-                      : `Packet Error Rate: ${packetErrorRate.toFixed(2)} %`}
-                </span>
-              ) : null}
               <Button color="default" outline size="xs" type="button" onClick={clear} disabled={busy}>Clear</Button>
               <Button
                 color={hasUnappliedChanges ? 'red' : 'default'}
@@ -211,7 +222,21 @@ export default function FilterBuilder({
               >
                 Apply
               </Button>
-              <Dropdown color="default" outline size="xs" type="button" label="File" placement="bottom-start" disabled={busy}>
+              <Dropdown
+                className="analyzer-filter-type"
+                aria-label="Filter type"
+                color="default"
+                outline
+                size="xs"
+                type="button"
+                label={draft.filterType === 'per' ? 'Packet Error Rate filter' : 'Normal filter'}
+                placement="bottom-start"
+                disabled={busy}
+              >
+                <DropdownItem onClick={() => changeFilterType('sniffer')}>Normal filter</DropdownItem>
+                <DropdownItem onClick={() => changeFilterType('per')}>Packet Error Rate filter</DropdownItem>
+              </Dropdown>
+              <Dropdown color="default" outline size="xs" type="button" label="Saved filters" placement="bottom-start" disabled={busy}>
                 <DropdownItem className="filter-file-menu-item" onClick={onOpenSavedFilters} disabled={busy}>Open</DropdownItem>
                 <DropdownItem
                   className="filter-file-menu-item"
@@ -234,20 +259,9 @@ export default function FilterBuilder({
                 >
                   Save as…
                 </DropdownItem>
-              </Dropdown>
-              <Dropdown
-                className="analyzer-filter-type"
-                aria-label="Filter type"
-                color="default"
-                outline
-                size="xs"
-                type="button"
-                label={draft.filterType === 'per' ? 'Packet Error Rate filter' : 'Normal filter'}
-                placement="bottom-start"
-                disabled={busy}
-              >
-                <DropdownItem onClick={() => changeFilterType('sniffer')}>Normal filter</DropdownItem>
-                <DropdownItem onClick={() => changeFilterType('per')}>Packet Error Rate filter</DropdownItem>
+                <DropdownItem className="filter-file-menu-item" onClick={onEditSavedFilters} disabled={busy}>
+                  Edit filter list
+                </DropdownItem>
               </Dropdown>
             </div>
             <div className="analyzer-filter-grid">
@@ -255,7 +269,10 @@ export default function FilterBuilder({
                 <FilterField label="Search" value={draft.text} placeholder="Payload, address, MType…" onChange={(value) => update('text', value)} />
               ) : null}
               {draft.filterType === 'per' ? (
-                <FilterField label="Device Address *" value={draft.devAddr} placeholder="26011ABC" onChange={(value) => update('devAddr', value)} />
+                <>
+                  <FilterField label="Device Address *" value={draft.devAddr} placeholder="26011ABC" onChange={(value) => update('devAddr', value)} />
+                  <FilterField label="Gateway ID" value={draft.gatewayId} placeholder="647FDAFFFE005E17" onChange={(value) => update('gatewayId', value)} />
+                </>
               ) : null}
               <DateTimeFilterField
                 label={draft.filterType === 'per' ? 'Start time' : 'Observed from'}
@@ -392,9 +409,22 @@ function DateTimeFilterField({
           shouldForceLeadingZeros
           onChange={(value) => onTimeChange(formatTimeFilterValue(value))}
         >
-          <DateInput className="analyzer-time-field">
+          <DateInput className={`analyzer-time-field${time ? ' has-clear-action' : ''}`}>
             {(segment) => <DateSegment className="analyzer-time-segment" segment={segment} />}
           </DateInput>
+          {time ? (
+            <button
+              className="analyzer-time-clear"
+              type="button"
+              aria-label={`Clear ${label.toLowerCase()} time`}
+              title="Clear time"
+              onClick={() => onTimeChange('')}
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="m6 6 8 8M14 6l-8 8" />
+              </svg>
+            </button>
+          ) : null}
         </TimeField>
       </span>
     </div>
@@ -439,6 +469,13 @@ export function normalizeFilterDraft(input: FilterDraft): {
       throw new Error('Device Address must contain exactly 8 hexadecimal digits.');
     }
     draft.devAddr = devAddr;
+    const gatewayIds = draft.gatewayId ? splitIdentifiers(draft.gatewayId) : [];
+    if (gatewayIds.length > 1) throw new Error('A PER dataset filter accepts at most one Gateway ID.');
+    const gatewayId = gatewayIds[0]?.replace(/[:\s-]/g, '').toUpperCase();
+    if (gatewayId !== undefined && !/^[0-9A-F]{16}$/.test(gatewayId)) {
+      throw new Error('Gateway ID must contain exactly 16 hexadecimal digits.');
+    }
+    draft.gatewayId = gatewayId ?? '';
     const filters: UplinkFilters = {
       packet: compactObject({
         from: from?.toISOString(),
@@ -448,6 +485,7 @@ export function normalizeFilterDraft(input: FilterDraft): {
           ? undefined
           : compactObject({ minimum: fCntFrom, maximum: fCntTo }),
       }),
+      reception: gatewayId === undefined ? undefined : { gatewayIds: [gatewayId] },
     };
     return { draft, filters };
   }
@@ -526,6 +564,7 @@ function hasFilterCriteria(filters: FilterDraft): boolean {
     return Boolean(
       timeRangeSet ||
       filters.devAddr.trim() ||
+      filters.gatewayId.trim() ||
       filters.fCntFrom.trim() ||
       filters.fCntTo.trim(),
     );

@@ -68,13 +68,16 @@ test('calculates PER from all unique matching frame counters', async () => {
       devAddrs: ['26011ABC'],
       fCnt: { minimum: 100, maximum: 103 },
     },
+    reception: { gatewayIds: ['1032547698BADCFE'] },
   });
 
   assert.equal(result?.percentage, 25);
   assert.equal(result?.received, 3);
   assert.equal(result?.expected, 4);
   assert.match(client.calls[0].query, /SELECT VALUE fcnt16 FROM lorawan_uplink/);
+  assert.match(client.calls[0].query, /SELECT VALUE uplink FROM gateway_reception/);
   assert.deepEqual(client.calls[0].variables.dev_addrs, ['26011ABC']);
+  assert.deepEqual(client.calls[0].variables.gateway_ids, ['1032547698BADCFE']);
 });
 
 test('maps normalized uplink and reception rows into UI details', async () => {

@@ -42,6 +42,14 @@
   .app-nav-tabs {
     width: 100%;
   }
+
+  .saved-filter-toolbar {
+    grid-template-columns: minmax(0, 1fr) minmax(100px, 0.45fr);
+  }
+
+  .saved-filter-scope {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 640px) {
@@ -83,13 +91,21 @@
     margin-left: 0;
   }
 
-  .saved-filter-row {
-    align-items: stretch;
-    flex-direction: column;
+  .saved-filter-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .saved-filter-scope {
+    grid-column: auto;
   }
 
   .saved-filter-actions {
     flex-wrap: wrap;
+  }
+
+  .saved-filter-pagination {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .invite-form {
