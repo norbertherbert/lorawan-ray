@@ -1,7 +1,7 @@
 import type { Surreal } from 'surrealdb';
 import type { Modulation, NumericRange, UplinkFilters } from './types.ts';
 
-export type SavedFilterType = 'sniffer' | 'per';
+export type SavedFilterType = 'sniffer' | 'per' | 'per-arad';
 export type SavedFilterVisibility = 'private' | 'shared';
 
 export interface SnifferSavedFilterDefinition {
@@ -21,7 +21,21 @@ export interface PerSavedFilterDefinition {
   fCntTo?: number;
 }
 
-export type SavedFilterDefinition = SnifferSavedFilterDefinition | PerSavedFilterDefinition;
+export interface PerAradSavedFilterDefinition {
+  type: 'per-arad';
+  version: 1;
+  devAddrPrefix: string;
+  gatewayId?: string;
+  observedFrom?: string;
+  observedTo?: string;
+}
+
+export type SavedFilterDefinition =
+  | SnifferSavedFilterDefinition
+  | PerSavedFilterDefinition
+  | PerAradSavedFilterDefinition;
+
+export const PER_ARAD_SUFFIXES = ['05', '06', '00', '01'] as const;
 
 export interface SavedFilter {
   id: string;
@@ -130,9 +144,23 @@ export function createSavedFilterDefinition(
 
   const packet = filters?.packet;
   const devAddrs = packet?.devAddrs ?? [];
+  const gatewayIds = filters?.reception?.gatewayIds ?? [];
+  if (type === 'per-arad') {
+    const devAddrPrefix = perAradPrefixFromAddresses(devAddrs);
+    if (gatewayIds.length > 1) throw new Error('An Arad PER filter accepts at most one Gateway ID.');
+    const gatewayId = gatewayIds[0] === undefined ? undefined : normalizeGatewayId(gatewayIds[0]);
+    return compactObject({
+      type,
+      version: 1 as const,
+      devAddrPrefix,
+      gatewayId,
+      observedFrom: packet?.from,
+      observedTo: packet?.to,
+    });
+  }
+
   if (devAddrs.length !== 1) throw new Error('A PER dataset filter requires exactly one Device Address.');
   const devAddr = normalizeDevAddr(devAddrs[0]);
-  const gatewayIds = filters?.reception?.gatewayIds ?? [];
   if (gatewayIds.length > 1) throw new Error('A PER dataset filter accepts at most one Gateway ID.');
   const gatewayId = gatewayIds[0] === undefined ? undefined : normalizeGatewayId(gatewayIds[0]);
   return compactObject({
@@ -151,6 +179,16 @@ export function savedFilterDefinitionToFilters(definition: SavedFilterDefinition
   const parsed = parseSavedFilterDefinition(definition);
   if (parsed.type === 'sniffer') {
     return Object.keys(parsed.filters).length ? cloneFilters(parsed.filters) : undefined;
+  }
+  if (parsed.type === 'per-arad') {
+    return compactObject({
+      packet: compactObject({
+        devAddrs: perAradDeviceAddresses(parsed.devAddrPrefix),
+        from: parsed.observedFrom,
+        to: parsed.observedTo,
+      }),
+      reception: parsed.gatewayId === undefined ? undefined : { gatewayIds: [parsed.gatewayId] },
+    });
   }
   return compactObject({
     packet: compactObject({
@@ -245,6 +283,25 @@ function parseSavedFilterDefinition(value: unknown): SavedFilterDefinition {
       throw new Error('The PER start FCnt must not exceed its end FCnt.');
     }
     return compactObject({ type: 'per' as const, version: 1 as const, devAddr, gatewayId, observedFrom, observedTo, fCntFrom, fCntTo });
+  }
+  if (value.type === 'per-arad') {
+    const devAddrPrefix = normalizeDevAddrPrefix(requiredString(value.devAddrPrefix, 'Arad PER Device Address Prefix'));
+    const gatewayId = value.gatewayId === undefined
+      ? undefined
+      : normalizeGatewayId(requiredString(value.gatewayId, 'Arad PER Gateway ID'));
+    const observedFrom = optionalTimestamp(value.observedFrom, 'Arad PER start time');
+    const observedTo = optionalTimestamp(value.observedTo, 'Arad PER end time');
+    if (observedFrom && observedTo && Date.parse(observedFrom) > Date.parse(observedTo)) {
+      throw new Error('The Arad PER start time must not be after its end time.');
+    }
+    return compactObject({
+      type: 'per-arad' as const,
+      version: 1 as const,
+      devAddrPrefix,
+      gatewayId,
+      observedFrom,
+      observedTo,
+    });
   }
   throw new Error('Unsupported saved-filter type.');
 }
@@ -353,6 +410,32 @@ function normalizeDevAddr(value: string): string {
   const normalized = value.replace(/[:\s-]/g, '').toUpperCase();
   if (!/^[0-9A-F]{8}$/.test(normalized)) throw new Error('Device Address must contain exactly 8 hexadecimal digits.');
   return normalized;
+}
+
+function normalizeDevAddrPrefix(value: string): string {
+  const normalized = value.replace(/[:\s-]/g, '').toUpperCase();
+  if (!/^[0-9A-F]{6}$/.test(normalized)) {
+    throw new Error('Device Address Prefix must contain exactly 6 hexadecimal digits.');
+  }
+  return normalized;
+}
+
+export function perAradDeviceAddresses(prefix: string): string[] {
+  const normalized = normalizeDevAddrPrefix(prefix);
+  return PER_ARAD_SUFFIXES.map((suffix) => `${normalized}${suffix}`);
+}
+
+function perAradPrefixFromAddresses(values: readonly string[]): string {
+  if (values.length !== PER_ARAD_SUFFIXES.length) {
+    throw new Error('An Arad PER filter requires the four Device Addresses ending in 05, 06, 00, and 01.');
+  }
+  const normalized = values.map(normalizeDevAddr);
+  const prefix = normalized[0].slice(0, 6);
+  const expected = perAradDeviceAddresses(prefix);
+  if (!expected.every((address) => normalized.includes(address))) {
+    throw new Error('An Arad PER filter requires one Device Address Prefix followed by suffixes 05, 06, 00, and 01.');
+  }
+  return prefix;
 }
 
 function normalizeGatewayId(value: string): string {

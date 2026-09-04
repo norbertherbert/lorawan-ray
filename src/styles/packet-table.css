@@ -6,6 +6,10 @@
   min-height: 0;
 }
 
+.analyzer-workspace.details-collapsed {
+  grid-template-rows: minmax(160px, 1fr) auto;
+}
+
 .packet-grid {
   position: relative;
   display: flex;
@@ -90,38 +94,30 @@
   text-transform: uppercase;
 }
 
-.packet-grid th button {
+.packet-column-heading {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
   width: 100%;
   min-height: 26px;
   padding: 5px 7px;
-  border: 0;
   color: inherit;
-  background: transparent;
   font: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
 }
 
-.packet-grid th button:hover,
-.packet-grid th button:focus-visible {
-  color: var(--ink);
-  background: #e2e1db;
-}
-
-.sort-indicator {
-  min-width: 14px;
-  color: #a09f99;
-  font-size: 0.56rem;
-  text-align: right;
-}
-
 .packet-grid tbody tr {
   cursor: pointer;
   outline: none;
+}
+
+.packet-grid .packet-virtual-spacer {
+  cursor: default;
+}
+
+.packet-grid .packet-virtual-spacer td {
+  padding: 0;
+  border: 0;
 }
 
 .packet-grid tbody tr:hover,
@@ -214,6 +210,35 @@
   text-align: center;
 }
 
+.packet-load-more {
+  display: flex;
+  justify-content: center;
+  padding: 4px;
+}
+
+.packet-load-more button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  padding: 2px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  color: #374151;
+  background: #f9fafb;
+  font-size: 0.65rem;
+  cursor: pointer;
+}
+
+.packet-load-more button:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+
+.packet-load-more button:disabled {
+  color: #9ca3af;
+  cursor: default;
+}
+
 .dark .packet-grid-scroll {
   border-color: #4b5563;
   scrollbar-color: #6b7280 #1f2937;
@@ -238,11 +263,6 @@
   background: #374151;
 }
 
-.dark .packet-grid th button:hover,
-.dark .packet-grid th button:focus-visible {
-  background: #4b5563;
-}
-
 .dark .packet-grid tbody tr:hover,
 .dark .packet-grid tbody tr:focus-visible {
   background: #374151;
@@ -250,6 +270,16 @@
 
 .dark .packet-grid tbody tr[data-selected] {
   background: #2d5963;
+}
+
+.dark .packet-load-more button {
+  border-color: #4b5563;
+  color: #e5e7eb;
+  background: #374151;
+}
+
+.dark .packet-load-more button:hover:not(:disabled) {
+  background: #4b5563;
 }
 
 .dark .table-filter-button {

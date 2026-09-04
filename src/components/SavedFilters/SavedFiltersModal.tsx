@@ -141,6 +141,7 @@ export function SavedFiltersModal({
               <option value="all">All</option>
               <option value="sniffer">Normal</option>
               <option value="per">PER</option>
+              <option value="per-arad">Arad PER</option>
             </Select>
           </label>
           <div className="saved-filter-scope" role="group" aria-label="Filter ownership">
@@ -188,8 +189,8 @@ export function SavedFiltersModal({
                         {filter.description ? <small title={filter.description}>{filter.description}</small> : null}
                       </TableCell>
                       <TableCell>
-                        <Badge className="saved-filter-table-badge" color={filter.definition.type === 'per' ? 'purple' : 'info'} size="xs">
-                          {filter.definition.type === 'per' ? 'PER' : 'Normal'}
+                        <Badge className="saved-filter-table-badge" color={filter.definition.type === 'sniffer' ? 'info' : 'purple'} size="xs">
+                          {savedFilterTypeLabel(filter.definition.type)}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -314,7 +315,7 @@ export function SaveFilterModal({ open, filterType, busy, error, onClose, onSave
 
   return (
     <Modal dismissible={!busy} show={open} size="lg" onClose={busy ? undefined : onClose}>
-      <ModalHeader>Save as a new {filterType === 'per' ? 'PER' : 'Sniffer'} filter</ModalHeader>
+      <ModalHeader>Save as a new {savedFilterTypeLabel(filterType)} filter</ModalHeader>
       <form onSubmit={submit}>
         <ModalBody>
           <div className="save-filter-form">
@@ -363,4 +364,10 @@ export function SaveFilterModal({ open, filterType, busy, error, onClose, onSave
       </form>
     </Modal>
   );
+}
+
+function savedFilterTypeLabel(type: SavedFilterType): string {
+  if (type === 'per') return 'PER';
+  if (type === 'per-arad') return 'Arad PER';
+  return 'Normal';
 }

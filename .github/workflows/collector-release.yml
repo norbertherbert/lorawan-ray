@@ -1,0 +1,59 @@
+name: Publish ARMv7 collector
+
+on:
+  push:
+    tags:
+      - "collector-v*"
+
+permissions:
+  contents: write
+
+env:
+  COLLECTOR_TARGET: armv7-unknown-linux-musleabihf
+  CROSS_VERSION: 0.2.5
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lorawan-ray-collector
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Install Rust target
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add "$COLLECTOR_TARGET"
+      - name: Cache cross
+        id: cache-cross
+        uses: actions/cache@v6
+        with:
+          path: ~/.cargo/bin/cross
+          key: ${{ runner.os }}-cross-${{ env.CROSS_VERSION }}
+      - name: Install cross
+        if: steps.cache-cross.outputs.cache-hit != 'true'
+        run: cargo install cross --locked --version "$CROSS_VERSION"
+      - name: Run tests
+        run: cargo test --locked
+      - name: Build ARMv7 collector
+        run: cross build --locked --release --target "$COLLECTOR_TARGET"
+      - name: Package release files
+        run: |
+          install -D -m 0755 \
+            "target/$COLLECTOR_TARGET/release/lorawan-ray-collector" \
+            release/lorawan-ray-collector
+          cd release
+          sha256sum lorawan-ray-collector > lorawan-ray-collector.sha256
+          file lorawan-ray-collector
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            release/lorawan-ray-collector \
+            release/lorawan-ray-collector.sha256 \
+            --verify-tag \
+            --generate-notes \
+            --title "LoRaWAN Ray Collector $GITHUB_REF_NAME"

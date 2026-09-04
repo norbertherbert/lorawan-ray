@@ -19,6 +19,60 @@
   flex: 0 0 auto;
 }
 
+.packet-details.is-collapsed > div {
+  gap: 0;
+}
+
+.packet-details-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.packet-details-toggle:focus-visible {
+  border-radius: 2px;
+  outline: 1px solid #9ca3af;
+  outline-offset: 2px;
+}
+
+.packet-details-heading-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.packet-details-chevron {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  transition: transform 150ms ease;
+}
+
+.packet-details-chevron.is-expanded {
+  transform: rotate(180deg);
+}
+
+.packet-details-content {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .packet-details-columns {
   display: grid;
   flex: 1 1 auto;

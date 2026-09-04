@@ -1,4 +1,4 @@
--- Saved Sniffer and PER dataset filters.
+-- Saved Sniffer, PER, and Arad PER dataset filters.
 -- Run as a database owner after selecting the production namespace/database.
 USE NS lorawan DB ray;
 
@@ -22,7 +22,7 @@ DEFINE FIELD OVERWRITE owner_name ON TABLE saved_filter TYPE string
   READONLY VALUE ($auth.name ?? $auth.email ?? "Unknown user");
 DEFINE FIELD OVERWRITE definition ON TABLE saved_filter TYPE object FLEXIBLE;
 DEFINE FIELD OVERWRITE definition.type ON TABLE saved_filter TYPE string
-  ASSERT $value IN ["sniffer", "per"];
+  ASSERT $value IN ["sniffer", "per", "per-arad"];
 DEFINE FIELD OVERWRITE definition.version ON TABLE saved_filter TYPE int
   ASSERT $value = 1;
 DEFINE FIELD OVERWRITE created_at ON TABLE saved_filter TYPE datetime

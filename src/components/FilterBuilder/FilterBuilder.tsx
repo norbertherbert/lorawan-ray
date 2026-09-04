@@ -14,6 +14,7 @@ import { DateInput, DateSegment, TimeField, type TimeValue } from 'react-aria-co
 import type { UplinkFilters } from '../../api/types.ts';
 import type { Modulation } from '../../api/types.ts';
 import {
+  perAradDeviceAddresses,
   savedFilterDefinitionToFilters,
   type SavedFilterDefinition,
   type SavedFilterType,
@@ -66,7 +67,7 @@ interface FilterBuilderProps {
   activeFilterName?: string;
   activeFilterModified?: boolean;
   canSave: boolean;
-  packetErrorRate?: number | null;
+  packetErrorRates?: Array<{ devAddr: string; percentage: number | null }>;
   filterPrefill?: FilterPrefill | null;
   onApply: (draft: FilterDraft, filters: UplinkFilters | undefined) => void;
   onOpenSavedFilters: () => void;
@@ -89,7 +90,7 @@ export default function FilterBuilder({
   activeFilterName,
   activeFilterModified,
   canSave,
-  packetErrorRate,
+  packetErrorRates,
   filterPrefill,
   onApply,
   onOpenSavedFilters,
@@ -111,7 +112,12 @@ export default function FilterBuilder({
   useEffect(() => {
     if (!filterPrefill) return;
     if (filterPrefill.kind === 'field') {
-      setDraft((current) => ({ ...current, [filterPrefill.field]: filterPrefill.value }));
+      setDraft((current) => ({
+        ...current,
+        [filterPrefill.field]: filterPrefill.field === 'devAddr' && current.filterType === 'per-arad'
+          ? filterPrefill.value.replace(/[:\s-]/g, '').slice(0, 6).toUpperCase()
+          : filterPrefill.value,
+      }));
     } else {
       const timestamp = splitTimestampForDraft(filterPrefill.value);
       setDraft((current) => filterPrefill.target === 'start'
@@ -185,11 +191,14 @@ export default function FilterBuilder({
           <path d="M4 5h16l-6.5 7.2v5.3l-3 1.5v-6.8L4 5Z" />
         </svg>
         <span className="analyzer-filter-toggle-label">Filter:</span>
-        {draft.filterType === 'per' && !hasUnappliedChanges && typeof packetErrorRate === 'number' ? (
-          <Badge className="active-filter-label filter-per-label" color="purple" size="xs">
-            PER: {packetErrorRate.toFixed(2)}%
-          </Badge>
-        ) : null}
+        {draft.filterType !== 'sniffer' && !hasUnappliedChanges
+          ? packetErrorRates?.map(({ devAddr, percentage }) => (
+            <Badge key={devAddr} className="active-filter-label filter-per-label" color="purple" size="xs">
+              {draft.filterType === 'per-arad' ? `${aradPerResultLabel(devAddr)}: ` : 'PER: '}
+              {percentage === null ? '—' : `${percentage.toFixed(2)}%`}
+            </Badge>
+          ))
+          : null}
         {savedFilterIsModified ? (
           <Badge className="active-filter-label filter-unsaved-label" color="warning" size="xs">Unsaved</Badge>
         ) : null}
@@ -229,12 +238,13 @@ export default function FilterBuilder({
                 outline
                 size="xs"
                 type="button"
-                label={draft.filterType === 'per' ? 'Packet Error Rate filter' : 'Normal filter'}
+                label={filterTypeLabel(draft.filterType)}
                 placement="bottom-start"
                 disabled={busy}
               >
                 <DropdownItem onClick={() => changeFilterType('sniffer')}>Normal filter</DropdownItem>
                 <DropdownItem onClick={() => changeFilterType('per')}>Packet Error Rate filter</DropdownItem>
+                <DropdownItem onClick={() => changeFilterType('per-arad')}>Arad PER filter</DropdownItem>
               </Dropdown>
               <Dropdown color="default" outline size="xs" type="button" label="Saved filters" placement="bottom-start" disabled={busy}>
                 <DropdownItem className="filter-file-menu-item" onClick={onOpenSavedFilters} disabled={busy}>Open</DropdownItem>
@@ -274,15 +284,21 @@ export default function FilterBuilder({
                   <FilterField label="Gateway ID" value={draft.gatewayId} placeholder="647FDAFFFE005E17" onChange={(value) => update('gatewayId', value)} />
                 </>
               ) : null}
+              {draft.filterType === 'per-arad' ? (
+                <>
+                  <FilterField label="Device Address Prefix *" value={draft.devAddr} placeholder="26011A" onChange={(value) => update('devAddr', value)} />
+                  <FilterField label="Gateway ID" value={draft.gatewayId} placeholder="647FDAFFFE005E17" onChange={(value) => update('gatewayId', value)} />
+                </>
+              ) : null}
               <DateTimeFilterField
-                label={draft.filterType === 'per' ? 'Start time' : 'Observed from'}
+                label="From"
                 date={draft.fromDate}
                 time={draft.fromTime}
                 onDateChange={(value) => update('fromDate', value)}
                 onTimeChange={(value) => update('fromTime', value)}
               />
               <DateTimeFilterField
-                label={draft.filterType === 'per' ? 'End time' : 'Observed to'}
+                label="To"
                 date={draft.toDate}
                 time={draft.toTime}
                 onDateChange={(value) => update('toDate', value)}
@@ -293,7 +309,7 @@ export default function FilterBuilder({
                   <FilterField label="Start FCnt" value={draft.fCntFrom} placeholder="100" inputMode="numeric" onChange={(value) => update('fCntFrom', value)} />
                   <FilterField label="End FCnt" value={draft.fCntTo} placeholder="500" inputMode="numeric" onChange={(value) => update('fCntTo', value)} />
                 </>
-              ) : (
+              ) : draft.filterType === 'sniffer' ? (
                 <>
                   <FilterField label="DevEUI" value={draft.devEui} placeholder="70B3D57ED0001001" onChange={(value) => update('devEui', value)} />
                   <FilterField label="DevAddr" value={draft.devAddr} placeholder="26011ABC" onChange={(value) => update('devAddr', value)} />
@@ -305,7 +321,7 @@ export default function FilterBuilder({
                   <FilterField label="Minimum RSSI" value={draft.rssiMinimum} placeholder="-110" inputMode="decimal" onChange={(value) => update('rssiMinimum', value)} />
                   <FilterField label="Minimum SNR" value={draft.snrMinimum} placeholder="-10" inputMode="decimal" onChange={(value) => update('snrMinimum', value)} />
                 </>
-              )}
+              ) : null}
             </div>
             {validationError ? <Alert className="mt-3" color="failure">{validationError}</Alert> : null}
           </form>
@@ -452,9 +468,9 @@ export function normalizeFilterDraft(input: FilterDraft): {
   const draft = Object.fromEntries(
     Object.entries(input).map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value]),
   ) as unknown as FilterDraft;
-  const from = parseLocalDateAndTime(draft.fromDate, draft.fromTime, 'Observed from', false);
-  const to = parseLocalDateAndTime(draft.toDate, draft.toTime, 'Observed to', true);
-  if (from && to && from > to) throw new Error('Observed from must not be after observed to.');
+  const from = parseLocalDateAndTime(draft.fromDate, draft.fromTime, 'From', false);
+  const to = parseLocalDateAndTime(draft.toDate, draft.toTime, 'To', true);
+  if (from && to && from > to) throw new Error('From must not be after To.');
 
   const fCntFrom = parseOptionalInteger(draft.fCntFrom, 'Start FCnt', 0, 4_294_967_295);
   const fCntTo = parseOptionalInteger(draft.fCntTo, 'End FCnt', 0, 4_294_967_295);
@@ -484,6 +500,30 @@ export function normalizeFilterDraft(input: FilterDraft): {
         fCnt: fCntFrom === undefined && fCntTo === undefined
           ? undefined
           : compactObject({ minimum: fCntFrom, maximum: fCntTo }),
+      }),
+      reception: gatewayId === undefined ? undefined : { gatewayIds: [gatewayId] },
+    };
+    return { draft, filters };
+  }
+
+  if (draft.filterType === 'per-arad') {
+    const devAddrPrefix = draft.devAddr.replace(/[:\s-]/g, '').toUpperCase();
+    if (!/^[0-9A-F]{6}$/.test(devAddrPrefix)) {
+      throw new Error('Device Address Prefix must contain exactly 6 hexadecimal digits.');
+    }
+    draft.devAddr = devAddrPrefix;
+    const gatewayIds = draft.gatewayId ? splitIdentifiers(draft.gatewayId) : [];
+    if (gatewayIds.length > 1) throw new Error('An Arad PER filter accepts at most one Gateway ID.');
+    const gatewayId = gatewayIds[0]?.replace(/[:\s-]/g, '').toUpperCase();
+    if (gatewayId !== undefined && !/^[0-9A-F]{16}$/.test(gatewayId)) {
+      throw new Error('Gateway ID must contain exactly 16 hexadecimal digits.');
+    }
+    draft.gatewayId = gatewayId ?? '';
+    const filters: UplinkFilters = {
+      packet: compactObject({
+        from: from?.toISOString(),
+        to: to?.toISOString(),
+        devAddrs: perAradDeviceAddresses(devAddrPrefix),
       }),
       reception: gatewayId === undefined ? undefined : { gatewayIds: [gatewayId] },
     };
@@ -540,7 +580,9 @@ export function filterDraftFromSavedDefinition(definition: SavedFilterDefinition
     toDate: to.date,
     toTime: to.time,
     devEui: packet?.devEuis?.join(', ') ?? '',
-    devAddr: packet?.devAddrs?.join(', ') ?? '',
+    devAddr: definition.type === 'per-arad'
+      ? definition.devAddrPrefix
+      : packet?.devAddrs?.join(', ') ?? '',
     fCntFrom: formatOptionalNumber(packet?.fCnt?.minimum),
     fCntTo: formatOptionalNumber(packet?.fCnt?.maximum),
     gatewayId: reception?.gatewayIds?.join(', ') ?? '',
@@ -560,13 +602,12 @@ function hasFilterCriteria(filters: FilterDraft): boolean {
     filters.toDate.trim() ||
     filters.toTime.trim(),
   );
-  if (filters.filterType === 'per') {
+  if (filters.filterType !== 'sniffer') {
     return Boolean(
       timeRangeSet ||
       filters.devAddr.trim() ||
       filters.gatewayId.trim() ||
-      filters.fCntFrom.trim() ||
-      filters.fCntTo.trim(),
+      (filters.filterType === 'per' && (filters.fCntFrom.trim() || filters.fCntTo.trim())),
     );
   }
   return Boolean(
@@ -582,6 +623,23 @@ function hasFilterCriteria(filters: FilterDraft): boolean {
     filters.rssiMinimum.trim() ||
     filters.snrMinimum.trim(),
   );
+}
+
+function filterTypeLabel(type: SavedFilterType): string {
+  if (type === 'per') return 'Packet Error Rate filter';
+  if (type === 'per-arad') return 'Arad PER filter';
+  return 'Normal filter';
+}
+
+function aradPerResultLabel(devAddr: string): string {
+  const suffix = devAddr.slice(-2).toUpperCase();
+  const labels: Record<string, string> = {
+    '05': 'LRF1/3',
+    '06': 'LRF4/6',
+    '00': 'SF10',
+    '01': 'SF9',
+  };
+  return labels[suffix] ?? suffix;
 }
 
 function parseLocalDateAndTime(

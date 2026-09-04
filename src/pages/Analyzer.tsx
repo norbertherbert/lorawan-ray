@@ -1,8 +1,14 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { functionalUpdate, type RowSelectionState, type SortingState } from '@tanstack/react-table';
-import { Alert, Badge, Card, Label, Select, Tooltip } from 'flowbite-react';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import {
+  functionalUpdate,
+  type ColumnVisibilityState,
+  type RowSelectionState,
+} from '@tanstack/react-table';
+import { Alert, Badge, Card, Dropdown, DropdownDivider, DropdownItem, Label, Select, Spinner, Tooltip } from 'flowbite-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { UplinkDataSource, UplinkFilters, UplinkPageRequest, UplinkSort } from '../api/types.ts';
+import type { UplinkDataSource, UplinkFilters, UplinkSort } from '../api/types.ts';
+import { exportPacketsToCsv } from '../api/packetCsv.ts';
+import { PACKET_COLUMN_OPTIONS, type PacketColumnId } from '../api/packetColumns.ts';
 import {
   createSavedFilterDefinition,
   savedFilterDefinitionSignature,
@@ -23,10 +29,31 @@ import FilterBuilder, {
 import PacketDetails from '../components/PacketDetails/PacketDetails.tsx';
 import PacketTable from '../components/PacketTable/PacketTable.tsx';
 import { SaveFilterModal, SavedFiltersModal } from '../components/SavedFilters/SavedFiltersModal.tsx';
-import { DownArrowIcon, RefreshIcon, UpArrowIcon } from '../components/Icons.jsx';
+import { DownloadIcon, RefreshIcon } from '../components/Icons.jsx';
 import { isSessionAuthenticationError } from '../lib.js';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
+const NEWEST_FIRST_SORTING: UplinkSort[] = [{ field: 'observedAt', direction: 'desc' }];
+const COLUMN_PREFERENCES_VERSION = 1;
+
+function columnPreferencesKey(userId: string) {
+  return `lorawan-ray.sniffer-columns.v${COLUMN_PREFERENCES_VERSION}:${userId}`;
+}
+
+function loadColumnVisibility(userId: string): ColumnVisibilityState {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(columnPreferencesKey(userId)) ?? '{}');
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+
+    const visibility: ColumnVisibilityState = {};
+    for (const { id } of PACKET_COLUMN_OPTIONS) {
+      if ((value as Record<string, unknown>)[id] === false) visibility[id] = false;
+    }
+    return PACKET_COLUMN_OPTIONS.some(({ id }) => visibility[id] !== false) ? visibility : {};
+  } catch {
+    return {};
+  }
+}
 
 interface AnalyzerProps {
   dataSource: UplinkDataSource;
@@ -47,9 +74,11 @@ export default function Analyzer({
   requireActiveSession,
   onDatabaseError,
 }: AnalyzerProps) {
-  const [page, setPage] = useState(0);
-  const [pageRequest, setPageRequest] = useState<UplinkPageRequest>({ limit: 25 });
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'observedAt', desc: true }]);
+  const [batchSize, setBatchSize] = useState(25);
+  const [tableResetVersion, setTableResetVersion] = useState(0);
+  const [columnVisibility, setColumnVisibility] = useState<ColumnVisibilityState>(
+    () => loadColumnVisibility(currentUserId),
+  );
   const [filterDraft, setFilterDraft] = useState<FilterDraft>(emptyFilterDraft);
   const [filters, setFilters] = useState<UplinkFilters | undefined>();
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -64,34 +93,57 @@ export default function Analyzer({
   const [activeSavedFilter, setActiveSavedFilter] = useState<SavedFilter | null>(null);
   const [hasUnappliedDraft, setHasUnappliedDraft] = useState(false);
   const [filterExpanded, setFilterExpanded] = useState(false);
+  const [packetDetailsExpanded, setPacketDetailsExpanded] = useState(false);
   const [filterPrefill, setFilterPrefill] = useState<FilterPrefill | null>(null);
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const [exportedPacketCount, setExportedPacketCount] = useState(0);
+  const [csvExportError, setCsvExportError] = useState('');
+  const csvExportController = useRef<AbortController | null>(null);
   const initialSavedFilterLoaded = useRef(false);
   const reportedSearchError = useRef<unknown>(null);
   const reportedDetailsError = useRef<unknown>(null);
-  const serverSorting = useMemo<UplinkSort[]>(
-    () => sorting.map(({ id, desc }) => ({ field: id as UplinkSort['field'], direction: desc ? 'desc' : 'asc' })),
-    [sorting],
-  );
-  const searchRequest = useMemo(
-    () => ({ page: pageRequest, sorting: serverSorting, filters }),
-    [pageRequest, serverSorting, filters],
-  );
-  const packets = useQuery({
-    queryKey: ['uplinks', sourceKey, searchRequest],
-    queryFn: ({ signal }) => dataSource.search(searchRequest, { signal }),
-    placeholderData: keepPreviousData,
+  const visibleColumnCount = PACKET_COLUMN_OPTIONS.filter(
+    ({ id }) => columnVisibility[id] !== false,
+  ).length;
+  const packets = useInfiniteQuery({
+    queryKey: ['uplinks', sourceKey, { batchSize, sorting: NEWEST_FIRST_SORTING, filters }],
+    initialPageParam: null as string | null,
+    queryFn: ({ signal, pageParam }) => dataSource.search(
+      {
+        page: { limit: batchSize, ...(pageParam ? { after: pageParam } : {}) },
+        sorting: NEWEST_FIRST_SORTING,
+        filters,
+      },
+      { signal },
+    ),
+    getNextPageParam: (lastPage) => (
+      lastPage.pageInfo.hasNextPage ? lastPage.pageInfo.endCursor ?? undefined : undefined
+    ),
   });
-  const appliedPerFilters = filterDraft.filterType === 'per' ? filters : undefined;
-  const packetErrorRate = useQuery({
-    queryKey: ['packet-error-rate', sourceKey, appliedPerFilters],
-    queryFn: ({ signal }) => dataSource.calculatePacketErrorRate(appliedPerFilters!, { signal }),
+  const packetRows = useMemo(
+    () => packets.data?.pages.flatMap(({ items }) => items) ?? [],
+    [packets.data],
+  );
+  const appliedPerFilters = filterDraft.filterType !== 'sniffer' ? filters : undefined;
+  const packetErrorRates = useQuery({
+    queryKey: ['packet-error-rates', sourceKey, filterDraft.filterType, appliedPerFilters],
+    queryFn: async ({ signal }) => {
+      const devAddrs = appliedPerFilters?.packet?.devAddrs ?? [];
+      return Promise.all(devAddrs.map(async (devAddr) => {
+        const result = await dataSource.calculatePacketErrorRate(
+          filtersForDeviceAddress(appliedPerFilters!, devAddr),
+          { signal },
+        );
+        return { devAddr, percentage: result?.percentage ?? null };
+      }));
+    },
     enabled: Boolean(appliedPerFilters),
   });
   const selectedId = Object.keys(rowSelection)[0];
   const details = useQuery({
     queryKey: ['uplink', sourceKey, selectedId],
     queryFn: ({ signal }) => dataSource.getById(selectedId, { signal }),
-    enabled: Boolean(selectedId),
+    enabled: Boolean(selectedId && packetDetailsExpanded),
   });
   const savedFilters = useQuery({
     queryKey: ['saved-filters', sourceKey, currentUserId],
@@ -144,6 +196,16 @@ export default function Analyzer({
   );
 
   useEffect(() => {
+    return () => csvExportController.current?.abort();
+  }, []);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(columnPreferencesKey(currentUserId), JSON.stringify(columnVisibility));
+    } catch {
+      // Column choices still apply for this browser session when storage is unavailable.
+    }
+  }, [columnVisibility, currentUserId]);
+  useEffect(() => {
     if (packets.error && packets.error !== reportedSearchError.current) {
       reportedSearchError.current = packets.error;
       onDatabaseError?.(packets.error, 'Could not load normalized uplinks.');
@@ -175,21 +237,29 @@ export default function Analyzer({
       .catch((cause) => reportSavedFilterError(cause, 'Could not open the shared filter.'));
   }, [savedFilterDataSource]);
 
-  function resetPage(nextLimit = pageRequest.limit) {
-    setPage(0);
-    setPageRequest({ limit: nextLimit });
+  function resetPacketList(nextBatchSize = batchSize) {
+    setBatchSize(nextBatchSize);
+    setTableResetVersion((current) => current + 1);
   }
 
-  function changeSorting(updater: SortingState | ((current: SortingState) => SortingState)) {
-    setSorting((current) => functionalUpdate(updater, current));
-    resetPage();
+  function setPacketColumnVisible(columnId: PacketColumnId, visible: boolean) {
+    if (!visible && visibleColumnCount === 1) return;
+
+    const nextVisibility = { ...columnVisibility };
+    if (visible) delete nextVisibility[columnId];
+    else nextVisibility[columnId] = false;
+    setColumnVisibility(nextVisibility);
+  }
+
+  function showAllPacketColumns() {
+    setColumnVisibility({});
   }
 
   function applyFilters(draft: FilterDraft, nextFilters: UplinkFilters | undefined) {
     setFilterDraft(draft);
     setFilters(nextFilters);
     setRowSelection({});
-    resetPage();
+    resetPacketList();
   }
 
   function activateSavedFilter(filter: SavedFilter, confirmDiscard = true) {
@@ -207,7 +277,7 @@ export default function Analyzer({
       setHasUnappliedDraft(false);
       setFilterExpanded(true);
       setRowSelection({});
-      resetPage();
+      resetPacketList();
       setSavedFiltersOpen(false);
       setSavedFilterError('');
       setSavedFilterNotice('');
@@ -307,24 +377,52 @@ export default function Analyzer({
     if (isSessionAuthenticationError(cause)) onDatabaseError?.(cause, fallback);
   }
 
-  function goEarlier() {
-    const cursor = packets.data?.pageInfo.endCursor;
-    if (!cursor) return;
-    setPage((current) => current + 1);
-    setPageRequest({ limit: pageRequest.limit, after: cursor });
-  }
-
-  function goLater() {
-    const cursor = packets.data?.pageInfo.startCursor;
-    if (!cursor) return;
-    setPage((current) => Math.max(0, current - 1));
-    setPageRequest({ limit: pageRequest.limit, before: cursor });
-  }
-
   function refreshPackets() {
     if (requireActiveSession?.() === false) return;
     void packets.refetch();
   }
+
+  const loadOlderPackets = useCallback(() => {
+    if (!packets.hasNextPage || packets.isFetchingNextPage) return;
+    void packets.fetchNextPage();
+  }, [packets.hasNextPage, packets.isFetchingNextPage, packets.fetchNextPage]);
+
+  function toggleCsvExport() {
+    if (csvExportController.current) {
+      csvExportController.current.abort();
+      return;
+    }
+    if (requireActiveSession?.() === false) return;
+
+    const controller = new AbortController();
+    csvExportController.current = controller;
+    setExportingCsv(true);
+    setExportedPacketCount(0);
+    setCsvExportError('');
+
+    void exportPacketsToCsv({
+      dataSource,
+      filters,
+      signal: controller.signal,
+      onProgress: setExportedPacketCount,
+    })
+      .then((csv) => {
+        if (!controller.signal.aborted) downloadCsv(csv, csvExportFilename());
+      })
+      .catch((cause) => {
+        if (controller.signal.aborted) return;
+        setCsvExportError(errorText(cause, 'Could not export packets.'));
+        reportSessionError(cause, 'Could not export packets.');
+      })
+      .finally(() => {
+        if (csvExportController.current === controller) csvExportController.current = null;
+        setExportingCsv(false);
+      });
+  }
+
+  const csvExportStatus = exportedPacketCount > 0
+    ? `Exporting CSV… ${exportedPacketCount.toLocaleString()} packets processed — click to cancel`
+    : 'Exporting CSV… click to cancel';
 
   return (
     <Card className="analyzer-card" id="analyzer-card">
@@ -334,11 +432,11 @@ export default function Analyzer({
         <FilterBuilder
           value={filterDraft}
           expanded={filterExpanded}
-          busy={packets.isFetching || savingFilter}
+          busy={packets.isLoading || savingFilter}
           activeFilterName={activeSavedFilter?.name}
           activeFilterModified={activeFilterModified}
           canSave={Boolean(activeSavedFilter && ownsActiveFilter)}
-          packetErrorRate={packetErrorRate.data?.percentage ?? (packetErrorRate.data === null ? null : undefined)}
+          packetErrorRates={packetErrorRates.data}
           filterPrefill={filterPrefill}
           onApply={applyFilters}
           onOpenSavedFilters={() => {
@@ -375,68 +473,106 @@ export default function Analyzer({
 
       <nav className="analyzer-pagination" aria-label="Packet pages">
         <div className="analyzer-page-size">
+          <div className="analyzer-column-picker">
+            <Dropdown
+              color="light"
+              size="xs"
+              type="button"
+              label="Columns"
+              placement="bottom-start"
+              dismissOnClick={false}
+            >
+              {PACKET_COLUMN_OPTIONS.map(({ id, label }) => {
+                const visible = columnVisibility[id] !== false;
+                return (
+                  <DropdownItem
+                    key={id}
+                    className="packet-column-option"
+                    role="menuitemcheckbox"
+                    aria-checked={visible}
+                    disabled={visible && visibleColumnCount === 1}
+                    onClick={() => setPacketColumnVisible(id, !visible)}
+                  >
+                    <span className={`packet-column-check${visible ? ' is-checked' : ''}`} aria-hidden="true">
+                      {visible ? '✓' : ''}
+                    </span>
+                    <span>{label}</span>
+                  </DropdownItem>
+                );
+              })}
+              <DropdownDivider />
+              <DropdownItem
+                className="packet-column-reset"
+                disabled={visibleColumnCount === PACKET_COLUMN_OPTIONS.length}
+                onClick={showAllPacketColumns}
+              >
+                Show all columns
+              </DropdownItem>
+            </Dropdown>
+          </div>
           <Label htmlFor="packet-page-size">Rows</Label>
           <Select
             sizing="sm"
             id="packet-page-size"
-            value={pageRequest.limit}
-            onChange={(event) => resetPage(Number(event.target.value))}
+            value={batchSize}
+            onChange={(event) => {
+              setRowSelection({});
+              resetPacketList(Number(event.target.value));
+            }}
             disabled={packets.isFetching}
           >
             {PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size}</option>)}
           </Select>
-          <span className="analyzer-result-count">{packets.data?.items.length ?? 0} packets</span>
-        </div>
-        <div className="analyzer-page-navigation">
-          <Tooltip content="Later">
-            <button
-              className="icon-action"
-              type="button"
-              onClick={goLater}
-              disabled={packets.isFetching || !packets.data?.pageInfo.hasPreviousPage}
-              aria-label="Later"
-            >
-              <UpArrowIcon />
-            </button>
-          </Tooltip>
-          <span>Page {-page}</span>
-          <Tooltip content="Earlier">
-            <button
-              className="icon-action"
-              type="button"
-              onClick={goEarlier}
-              disabled={packets.isFetching || !packets.data?.pageInfo.hasNextPage}
-              aria-label="Earlier"
-            >
-              <DownArrowIcon />
-            </button>
-          </Tooltip>
+          <span className="analyzer-result-count">{packetRows.length} packets loaded</span>
         </div>
         <div className="analyzer-refresh">
+          {exportingCsv ? <span className="sr-only" role="status" aria-live="polite">{csvExportStatus}</span> : null}
+          <Tooltip content={exportingCsv ? csvExportStatus : 'Export filtered packets as CSV'}>
+            <button
+              className="icon-action"
+              type="button"
+              onClick={toggleCsvExport}
+              aria-label={exportingCsv ? 'Cancel CSV export' : 'Export filtered packets as CSV'}
+            >
+              {exportingCsv ? <Spinner size="sm" aria-hidden="true" /> : <DownloadIcon />}
+            </button>
+          </Tooltip>
           <Tooltip content="Refresh packets">
-            <button className="icon-action" type="button" onClick={refreshPackets} disabled={packets.isFetching} aria-label="Refresh packets">
-              <span className={packets.isFetching ? 'animate-spin' : ''}><RefreshIcon /></span>
+            <button className="icon-action" type="button" onClick={refreshPackets} disabled={packets.isRefetching} aria-label="Refresh packets">
+              <span className={packets.isRefetching ? 'animate-spin' : ''}><RefreshIcon /></span>
             </button>
           </Tooltip>
         </div>
       </nav>
 
+      {csvExportError ? <Alert color="failure">{csvExportError}</Alert> : null}
       {packets.error ? <Alert color="failure">Could not load packets: {packets.error.message}</Alert> : null}
-      <div className="analyzer-workspace">
+      <div className={`analyzer-workspace${packetDetailsExpanded ? '' : ' details-collapsed'}`}>
         <PacketTable
-          data={packets.data?.items ?? []}
-          sorting={sorting}
+          data={packetRows}
+          columnVisibility={columnVisibility}
           rowSelection={rowSelection}
-          loading={packets.isFetching}
+          loading={packets.isLoading}
+          loadingMore={packets.isFetchingNextPage}
+          hasMore={Boolean(packets.hasNextPage)}
+          scrollResetVersion={tableResetVersion}
           showFilterActions={filterExpanded}
           onFilterByDevAddr={prefillDevAddr}
           onFilterByGatewayId={prefillGatewayId}
           onFilterStartTime={prefillStartTime}
           onFilterEndTime={prefillEndTime}
-          onSortingChange={changeSorting}
+          onColumnVisibilityChange={setColumnVisibility}
           onRowSelectionChange={(updater) => setRowSelection((current) => functionalUpdate(updater, current))}
+          onRowDoubleClick={() => setPacketDetailsExpanded(true)}
+          onLoadMore={loadOlderPackets}
         />
-        <PacketDetails packet={details.data} loading={details.isFetching} error={details.error} />
+        <PacketDetails
+          packet={details.data}
+          loading={details.isFetching}
+          error={details.error}
+          expanded={packetDetailsExpanded}
+          onExpandedChange={setPacketDetailsExpanded}
+        />
       </div>
 
       <SavedFiltersModal
@@ -466,6 +602,37 @@ export default function Analyzer({
   );
 }
 
+function filtersForDeviceAddress(filters: UplinkFilters, devAddr: string): UplinkFilters {
+  return {
+    ...filters,
+    packet: {
+      ...filters.packet,
+      devAddrs: [devAddr],
+    },
+  };
+}
+
 function errorText(cause: unknown, fallback: string): string {
   return cause instanceof Error && cause.message ? cause.message : fallback;
+}
+
+function downloadCsv(csv: string, filename: string) {
+  const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function csvExportFilename(now = new Date()) {
+  const date = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
+    .map((part) => String(part).padStart(2, '0'))
+    .join('');
+  const time = [now.getHours(), now.getMinutes()]
+    .map((part) => String(part).padStart(2, '0'))
+    .join('');
+  return `lorawan-ray-packets-${date}-${time}.csv`;
 }

@@ -298,6 +298,30 @@ Configure the process using arguments:
 
 ## Kerlink ARM/Linux build
 
+The latest published ARMv7 collector is available from GitHub Releases:
+
+```text
+https://github.com/norbertherbert/lorawan-ray/releases/latest/download/lorawan-ray-collector
+```
+
+Download and verify it on the gateway:
+
+```bash
+curl -LO https://github.com/norbertherbert/lorawan-ray/releases/latest/download/lorawan-ray-collector
+curl -LO https://github.com/norbertherbert/lorawan-ray/releases/latest/download/lorawan-ray-collector.sha256
+sha256sum -c lorawan-ray-collector.sha256
+chmod +x lorawan-ray-collector
+```
+
+Releases are built automatically from tags named `collector-v*`. To publish
+version `0.1.0`, create and push the corresponding tag from the commit that
+should be released:
+
+```bash
+git tag collector-v0.1.0
+git push origin collector-v0.1.0
+```
+
 The Kerlink gateway reports `armv7l`. On Fedora, build a statically linked
 32-bit ARM binary with `cross` and Podman.
 

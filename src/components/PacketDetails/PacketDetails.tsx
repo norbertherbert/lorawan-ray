@@ -6,20 +6,47 @@ interface PacketDetailsProps {
   packet?: UplinkDetails;
   loading: boolean;
   error?: Error | null;
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
 }
 
-export default function PacketDetails({ packet, loading, error }: PacketDetailsProps) {
+export default function PacketDetails({
+  packet,
+  loading,
+  error,
+  expanded,
+  onExpandedChange,
+}: PacketDetailsProps) {
   return (
-    <Card className="packet-details" aria-live="polite">
+    <Card className={`packet-details${expanded ? '' : ' is-collapsed'}`}>
       <div className="packet-details-heading">
-        <h3 className="text-sm font-bold text-gray-900">Packet details</h3>
-        {packet ? <Badge className="compact-heading-badge" color="gray" size="xs">{packet.receptionCount} gateway reception{packet.receptionCount === 1 ? '' : 's'}</Badge> : null}
+        <button
+          className="packet-details-toggle"
+          type="button"
+          aria-controls="packet-details-content"
+          aria-expanded={expanded}
+          onClick={() => onExpandedChange(!expanded)}
+        >
+          <h3 className="text-sm font-bold text-gray-900">Packet details</h3>
+          <span className="packet-details-heading-actions">
+            {packet ? <Badge className="compact-heading-badge" color="gray" size="xs">{packet.receptionCount} gateway reception{packet.receptionCount === 1 ? '' : 's'}</Badge> : null}
+            <svg
+              className={`packet-details-chevron${expanded ? ' is-expanded' : ''}`}
+              viewBox="0 0 20 20"
+              aria-hidden="true"
+            >
+              <path d="m5 7.5 5 5 5-5" />
+            </svg>
+          </span>
+        </button>
       </div>
-      {loading ? <div className="flex items-center justify-center gap-3 py-8"><Spinner /><span>Loading decoded frame…</span></div> : null}
-      {error ? <Alert color="failure">Could not load packet details: {error.message}</Alert> : null}
-      {!loading && !error && !packet ? <Alert color="gray">Choose a row above to inspect its decoded LoRaWAN structure.</Alert> : null}
-      {packet ? (
-        <div className="packet-details-columns">
+      {expanded ? (
+        <div id="packet-details-content" className="packet-details-content" aria-live="polite">
+          {loading ? <div className="flex items-center justify-center gap-3 py-8"><Spinner /><span>Loading decoded frame…</span></div> : null}
+          {error ? <Alert color="failure">Could not load packet details: {error.message}</Alert> : null}
+          {!loading && !error && !packet ? <Alert color="gray">Double-click a row above to inspect its decoded LoRaWAN structure.</Alert> : null}
+          {packet ? (
+            <div className="packet-details-columns">
           <Card className="protocol-tree">
             <TreeGroup label="MHDR">
               <TreeValue label="Raw" value={packet.frame.mhdr.rawHex} mono />
@@ -100,6 +127,8 @@ export default function PacketDetails({ packet, loading, error }: PacketDetailsP
               ))}
             </div>
           </Card>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </Card>

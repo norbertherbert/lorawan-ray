@@ -682,13 +682,12 @@
 
 .analyzer-pagination {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
 }
 
-.analyzer-page-size,
-.analyzer-page-navigation {
+.analyzer-page-size {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -703,6 +702,10 @@
   width: 72px;
 }
 
+.analyzer-page-size > .analyzer-column-picker {
+  width: auto;
+}
+
 .analyzer-page-size select {
   height: 26px;
   padding: 2px 24px 2px 4px;
@@ -710,23 +713,85 @@
   line-height: 1.1;
 }
 
-.analyzer-page-navigation {
-  justify-self: center;
+.analyzer-column-picker > button {
+  height: 26px !important;
+  min-height: 26px;
+  padding: 2px 8px !important;
+  border: 1px solid #d1d5db !important;
+  color: #111827 !important;
+  background: #f9fafb !important;
+  font-size: 0.75rem !important;
+  line-height: 1.1;
+  box-shadow: none !important;
 }
 
-.analyzer-page-navigation .icon-action {
-  padding: 2px;
+.analyzer-column-picker > button:hover {
+  border-color: #d1d5db !important;
+  background: #f3f4f6 !important;
 }
 
-.analyzer-page-navigation > span {
-  min-width: 56px;
-  color: #6b7280;
-  font-size: 0.75rem;
-  text-align: center;
-  white-space: nowrap;
+.analyzer-column-picker > button:focus-visible {
+  border-color: #9ca3af !important;
+  outline: 1px solid #9ca3af;
+  outline-offset: 0;
+  box-shadow: none !important;
+}
+
+.dark .analyzer-column-picker > button {
+  border-color: #4b5563 !important;
+  color: #f3f4f6 !important;
+  background: #374151 !important;
+}
+
+.dark .analyzer-column-picker > button:hover {
+  border-color: #4b5563 !important;
+  background: #4b5563 !important;
+}
+
+.packet-column-option,
+.packet-column-reset {
+  min-height: 25px;
+  padding: 4px 10px !important;
+  font-size: 0.7rem !important;
+  line-height: 1rem;
+}
+
+.packet-column-option {
+  gap: 7px;
+}
+
+.packet-column-check {
+  display: inline-grid;
+  width: 13px;
+  height: 13px;
+  border: 1px solid #9ca3af;
+  border-radius: 3px;
+  color: #fff;
+  background: #fff;
+  font-size: 0.58rem;
+  font-weight: 700;
+  line-height: 1;
+  place-items: center;
+}
+
+.packet-column-check.is-checked {
+  border-color: #2563eb;
+  background: #2563eb;
+}
+
+.dark .packet-column-check {
+  background: #374151;
+}
+
+.dark .packet-column-check.is-checked {
+  border-color: #3b82f6;
+  background: #3b82f6;
 }
 
 .analyzer-refresh {
+  display: flex;
+  align-items: center;
+  gap: 2px;
   justify-self: end;
 }
 
