@@ -16,9 +16,9 @@ import type {
   UplinkSummary,
 } from './types.ts';
 import { UplinkDataSourceError } from './types.ts';
+import { MAX_UPLINK_PAGE_SIZE } from './types.ts';
 import { calculatePacketErrorRate } from './packetErrorRate.ts';
 
-const MAX_PAGE_SIZE = 250;
 const DEFAULT_SORTING: readonly UplinkSort[] = [{ field: 'observedAt', direction: 'desc' }];
 
 interface MockCursor {
@@ -100,10 +100,10 @@ export const mockUplinkDataSource = new MockUplinkDataSource();
 
 function validateRequest(request: UplinkSearchRequest): void {
   const { page, sorting = [], filters } = request;
-  if (!Number.isInteger(page.limit) || page.limit < 1 || page.limit > MAX_PAGE_SIZE) {
+  if (!Number.isInteger(page.limit) || page.limit < 1 || page.limit > MAX_UPLINK_PAGE_SIZE) {
     throw new UplinkDataSourceError(
       'invalid_request',
-      `Page size must be an integer between 1 and ${MAX_PAGE_SIZE}.`,
+      `Page size must be an integer between 1 and ${MAX_UPLINK_PAGE_SIZE}.`,
     );
   }
   if (page.after && page.before) {

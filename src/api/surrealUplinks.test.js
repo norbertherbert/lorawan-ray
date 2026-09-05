@@ -2,6 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildSearchQuery, SurrealUplinkDataSource } from './surrealUplinks.ts';
 
+test('accepts packet batches up to 500 rows', () => {
+  assert.equal(buildSearchQuery({ page: { limit: 500 } }).variables.limit, 501);
+  assert.throws(
+    () => buildSearchQuery({ page: { limit: 501 } }),
+    /Page size must be an integer between 1 and 500/,
+  );
+});
+
 test('builds a parameterized normalized-table query from structured filters', () => {
   const built = buildSearchQuery({
     page: { limit: 25 },

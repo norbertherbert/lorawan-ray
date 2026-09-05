@@ -32,7 +32,7 @@ import { SaveFilterModal, SavedFiltersModal } from '../components/SavedFilters/S
 import { DownloadIcon, RefreshIcon } from '../components/Icons.jsx';
 import { isSessionAuthenticationError } from '../lib.js';
 
-const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
 const NEWEST_FIRST_SORTING: UplinkSort[] = [{ field: 'observedAt', direction: 'desc' }];
 const COLUMN_PREFERENCES_VERSION = 1;
 

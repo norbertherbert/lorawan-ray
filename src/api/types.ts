@@ -1,5 +1,7 @@
 import type { DecodedLoRaWANFrame, LoRaWANMessageType } from '../lorawan/types';
 
+export const MAX_UPLINK_PAGE_SIZE = 500;
+
 // These are UI-domain types, not direct SurrealDB row shapes. A data-source
 // adapter validates database rows from databaseTypes.ts and maps snake_case,
 // hertz, and missing fields into this stable browser-facing contract.

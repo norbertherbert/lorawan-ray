@@ -16,6 +16,17 @@ test('mock data models logical uplinks with multiple gateway receptions', () => 
   );
 });
 
+test('accepts the largest selectable packet batch size', async () => {
+  const source = new MockUplinkDataSource();
+
+  const page = await source.search({ page: { limit: 500 } });
+  assert.equal(page.items.length, mockUplinks.length);
+  await assert.rejects(
+    source.search({ page: { limit: 501 } }),
+    /Page size must be an integer between 1 and 500/,
+  );
+});
+
 test('filters LR-FHSS packets by modulation and data-rate identifier', async () => {
   const source = new MockUplinkDataSource();
   const page = await source.search({

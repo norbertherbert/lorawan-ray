@@ -22,6 +22,7 @@ import type {
   UplinkSummary,
 } from './types.ts';
 import { UplinkDataSourceError } from './types.ts';
+import { MAX_UPLINK_PAGE_SIZE } from './types.ts';
 import { calculatePacketErrorRate } from './packetErrorRate.ts';
 import type {
   DecodedLoRaWANFrame,
@@ -29,7 +30,6 @@ import type {
   LoRaWANMessageType,
 } from '../lorawan/types.ts';
 
-const MAX_PAGE_SIZE = 250;
 const DEFAULT_SORTING: readonly UplinkSort[] = [{ field: 'observedAt', direction: 'desc' }];
 const MESSAGE_TYPES: readonly LoRaWANMessageType[] = [
   'JoinRequest',
@@ -375,8 +375,8 @@ function hasReceptionFilter(filters: NonNullable<UplinkFilters['reception']>): b
 }
 
 function validateRequest(request: UplinkSearchRequest): void {
-  if (!Number.isInteger(request.page.limit) || request.page.limit < 1 || request.page.limit > MAX_PAGE_SIZE) {
-    throw new UplinkDataSourceError('invalid_request', `Page size must be an integer between 1 and ${MAX_PAGE_SIZE}.`);
+  if (!Number.isInteger(request.page.limit) || request.page.limit < 1 || request.page.limit > MAX_UPLINK_PAGE_SIZE) {
+    throw new UplinkDataSourceError('invalid_request', `Page size must be an integer between 1 and ${MAX_UPLINK_PAGE_SIZE}.`);
   }
   if (request.page.after && request.page.before) {
     throw new UplinkDataSourceError('invalid_request', 'A page request cannot contain both after and before cursors.');
