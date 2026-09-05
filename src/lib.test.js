@@ -42,6 +42,10 @@ test('recognizes only session-related authentication errors', () => {
     true,
   );
   assert.equal(isSessionAuthenticationError({ isInvalidAuth: true }), true);
+  const anonymousError = new Error('Anonymous access not allowed: Not enough permissions to perform this action');
+  assert.equal(isSessionAuthenticationError(anonymousError), true);
+  assert.equal(isSessionAuthenticationError(new Error('Query failed', { cause: anonymousError })), true);
+  assert.equal(isSessionAuthenticationError(new Error('Not enough permissions to perform this action')), false);
   assert.equal(
     isSessionAuthenticationError({
       details: {

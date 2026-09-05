@@ -1,4 +1,4 @@
-import { Alert, Badge, Card, Spinner } from 'flowbite-react';
+import { Alert, Card, Spinner } from 'flowbite-react';
 import type { UplinkDetails } from '../../api/types.ts';
 import { formatDate } from '../../lib.js';
 
@@ -27,15 +27,22 @@ export default function PacketDetails({
           aria-expanded={expanded}
           onClick={() => onExpandedChange(!expanded)}
         >
-          <h3 className="text-sm font-bold text-gray-900">Packet details</h3>
+          <h3 className="packet-details-title text-sm font-bold text-gray-900">
+            <svg className="packet-details-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <rect x="3" y="3" width="6" height="5" rx="1" />
+              <path d="M6 8v11m0-6h8m-8 6h8" />
+              <rect x="14" y="10" width="7" height="5" rx="1" />
+              <rect x="14" y="17" width="7" height="5" rx="1" />
+            </svg>
+            Packet details
+          </h3>
           <span className="packet-details-heading-actions">
-            {packet ? <Badge className="compact-heading-badge" color="gray" size="xs">{packet.receptionCount} gateway reception{packet.receptionCount === 1 ? '' : 's'}</Badge> : null}
             <svg
               className={`packet-details-chevron${expanded ? ' is-expanded' : ''}`}
               viewBox="0 0 20 20"
               aria-hidden="true"
             >
-              <path d="m5 7.5 5 5 5-5" />
+              <path d="m5 12.5 5-5 5 5" />
             </svg>
           </span>
         </button>

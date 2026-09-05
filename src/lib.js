@@ -115,7 +115,11 @@ export function isSessionAuthenticationError(error) {
     const authKind = details?.kind === 'Auth' ? details.details?.kind : null;
     if (['TokenExpired', 'SessionExpired', 'InvalidAuth'].includes(authKind)) return true;
 
-    if (/\b(?:token|session)\b.*\bexpired\b/i.test(String(current.message || ''))) return true;
+    const message = String(current.message || '');
+    if (/\b(?:token|session)\b.*\bexpired\b/i.test(message)) return true;
+    // An expired record session can become anonymous on an existing connection.
+    // Ordinary permission denials must not sign out an authenticated user.
+    if (/\banonymous access not allowed\b/i.test(message)) return true;
     current = current.cause;
   }
 

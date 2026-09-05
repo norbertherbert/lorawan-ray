@@ -1,6 +1,11 @@
 .packet-details {
   min-height: 0;
+  border: 1px solid #9ca3af;
   overflow: hidden;
+}
+
+.dark .packet-details {
+  border-color: #6b7280;
 }
 
 .packet-details > div,
@@ -11,8 +16,8 @@
 }
 
 .packet-details > div {
-  gap: 4px;
-  padding: 10px;
+  gap: 0;
+  padding: 0;
 }
 
 .packet-details-heading {
@@ -29,7 +34,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 0;
+  padding: 10px;
   border: 0;
   color: inherit;
   background: transparent;
@@ -41,6 +46,23 @@
   border-radius: 2px;
   outline: 1px solid #9ca3af;
   outline-offset: 2px;
+}
+
+.packet-details-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.packet-details-icon {
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .packet-details-heading-actions {
@@ -66,6 +88,7 @@
 }
 
 .packet-details-content {
+  padding: 10px;
   display: flex;
   flex: 1 1 auto;
   min-height: 0;

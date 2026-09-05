@@ -165,11 +165,12 @@ export default function App() {
 
     try {
       clearSessionExpiry();
-      await db.close().catch(() => {});
       window.google?.accounts?.id?.disableAutoSelect();
       resetAuthenticatedState();
       setStatus({ state: 'offline', text: 'Session expired' });
       setError('Your session expired. Sign in again to continue.');
+      // Show sign-in immediately, even if WebSocket cleanup is slow.
+      await db.close().catch(() => {});
     } finally {
       sessionExpiryHandlingRef.current = false;
     }

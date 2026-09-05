@@ -38,14 +38,66 @@
   line-height: 1.1;
 }
 
+.analyzer-filter-accordion {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #9ca3af;
+  border-radius: 0.5rem;
+  background: #fff;
+}
+
+.dark .analyzer-filter-accordion {
+  border-color: #6b7280;
+  background: #1f2937;
+}
+
 .analyzer-filter-toggle {
-  margin-left: auto;
-  min-height: 26px;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px;
   border: 0;
+  border-radius: 0.5rem;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
 }
 
 .analyzer-filter-toggle:focus {
   box-shadow: none;
+}
+
+.analyzer-filter-toggle,
+.packet-details .packet-details-toggle {
+  color: #111827;
+  background: #e5e7eb;
+}
+
+.analyzer-filter-toggle[aria-expanded='true'],
+.packet-details .packet-details-toggle[aria-expanded='true'] {
+  border-bottom: 1px solid #9ca3af;
+  background: #d1d5db;
+  border-radius: 0.5rem 0.5rem 0 0;
+}
+
+.packet-details .packet-details-toggle h3 {
+  color: inherit;
+}
+
+.dark .analyzer-filter-toggle,
+.dark .packet-details .packet-details-toggle {
+  color: #f3f4f6;
+  background: #18212f;
+}
+
+.dark .analyzer-filter-toggle[aria-expanded='true'],
+.dark .packet-details .packet-details-toggle[aria-expanded='true'] {
+  border-bottom-color: #6b7280;
+  color: #fff;
+  background: #111827;
 }
 
 .analyzer-filter-toggle:focus-visible {
@@ -53,21 +105,16 @@
   outline-offset: 1px;
 }
 
-.analyzer-filter-toggle > span {
-  gap: 5px;
-  padding: 2px 7px;
-  font-size: 0.6875rem;
+.analyzer-filter-toggle > .analyzer-filter-toggle-label {
+  font-size: 0.875rem;
+  font-weight: 700;
   line-height: 1.1;
 }
 
-.analyzer-filter-toggle > .analyzer-filter-toggle-label {
-  font-size: 0.8125rem;
-  font-weight: 500;
-}
-
 .analyzer-filter-icon {
-  width: 13px;
-  height: 13px;
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
   fill: none;
   stroke: currentColor;
   stroke-linejoin: round;
@@ -75,6 +122,8 @@
 }
 
 .analyzer-filter-chevron {
+  margin-left: auto;
+  flex-shrink: 0;
   width: 14px;
   height: 14px;
   fill: none;
@@ -97,6 +146,16 @@
   border: 1px solid #d1d5db;
   border-radius: 0.5rem;
   background: #fff;
+}
+
+.analyzer-filter-accordion > .analyzer-filter-panel {
+  border: 0;
+  border-top: 0;
+  border-radius: 0 0 0.5rem 0.5rem;
+}
+
+.dark .analyzer-filter-accordion > .analyzer-filter-panel {
+  border-top-color: #374151;
 }
 
 .analyzer-filter-menu {
@@ -696,6 +755,14 @@
 .analyzer-page-size label {
   font-size: 0.75rem;
   line-height: 1.1;
+}
+
+.packet-list-title {
+  margin: 0 6px 0 0;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 .analyzer-page-size > .analyzer-row-count-select {

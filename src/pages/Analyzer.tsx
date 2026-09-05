@@ -27,6 +27,7 @@ import FilterBuilder, {
   type FilterDraft,
 } from '../components/FilterBuilder/FilterBuilder.tsx';
 import PacketDetails from '../components/PacketDetails/PacketDetails.tsx';
+import PacketSplit from '../components/PacketSplit.tsx';
 import PacketTable from '../components/PacketTable/PacketTable.tsx';
 import { SaveFilterModal, SavedFiltersModal } from '../components/SavedFilters/SavedFiltersModal.tsx';
 import { DownloadIcon, RefreshIcon } from '../components/Icons.jsx';
@@ -230,6 +231,11 @@ export default function Analyzer({
     reportSavedFilterError(savedFilters.error, 'Could not load saved filters.');
   }, [savedFilters.error]);
   useEffect(() => {
+    if (packetErrorRates.error && isSessionAuthenticationError(packetErrorRates.error)) {
+      onDatabaseError?.(packetErrorRates.error, 'Could not calculate packet error rates.');
+    }
+  }, [packetErrorRates.error, onDatabaseError]);
+  useEffect(() => {
     if (initialSavedFilterLoaded.current) return;
     initialSavedFilterLoaded.current = true;
     let filterId: string | null = null;
@@ -268,6 +274,16 @@ export default function Analyzer({
     setFilters(nextFilters);
     setRowSelection({});
     resetPacketList();
+  }
+
+  function resetFilter(draft: FilterDraft) {
+    setActiveSavedFilter(null);
+    setHasUnappliedDraft(false);
+    setSavedFilterLocation(null);
+    setFilterPrefill(null);
+    setSavedFilterError('');
+    setSavedFilterNotice('');
+    applyFilters(draft, undefined);
   }
 
   function activateSavedFilter(filter: SavedFilter, confirmDiscard = true) {
@@ -448,7 +464,6 @@ export default function Analyzer({
   return (
     <Card className="analyzer-card" id="analyzer-card">
       <div className="analyzer-heading">
-        <h2 className="text-base font-bold tracking-tight text-gray-900">Packet sniffer</h2>
         {sourceLabel ? <Badge className="compact-heading-badge" color="warning" size="xs">{sourceLabel}</Badge> : null}
         <FilterBuilder
           value={filterDraft}
@@ -460,6 +475,7 @@ export default function Analyzer({
           packetErrorRates={packetErrorRates.data}
           filterPrefill={filterPrefill}
           onApply={applyFilters}
+          onReset={resetFilter}
           onOpenSavedFilters={() => {
             setSavedFilterNotice('');
             setSavedFiltersMode('open');
@@ -480,10 +496,7 @@ export default function Analyzer({
           }}
           onCloseSavedFilter={() => {
             const cleared = { ...emptyFilterDraft(), filterType: filterDraft.filterType };
-            applyFilters(cleared, undefined);
-            setActiveSavedFilter(null);
-            setHasUnappliedDraft(false);
-            setSavedFilterLocation(null);
+            resetFilter(cleared);
           }}
           onDraftDirtyChange={setHasUnappliedDraft}
           onExpandedChange={setFilterExpanded}
@@ -494,6 +507,7 @@ export default function Analyzer({
 
       <nav className="analyzer-pagination" aria-label="Packet pages">
         <div className="analyzer-page-size">
+          <h2 className="packet-list-title">Packet list</h2>
           <div className="analyzer-column-picker">
             <Dropdown
               color="light"
@@ -570,8 +584,8 @@ export default function Analyzer({
       </nav>
 
       {csvExportError ? <Alert color="failure">{csvExportError}</Alert> : null}
-      {packets.error ? <Alert color="failure">Could not load packets: {packets.error.message}</Alert> : null}
-      <div className={`analyzer-workspace${packetDetailsExpanded ? '' : ' details-collapsed'}`}>
+      {packets.error && !isSessionAuthenticationError(packets.error) ? <Alert color="failure">Could not load packets: {packets.error.message}</Alert> : null}
+      <PacketSplit expanded={packetDetailsExpanded} table={
         <PacketTable
           data={packetRows}
           columnVisibility={columnVisibility}
@@ -592,14 +606,15 @@ export default function Analyzer({
           onLoadMore={loadOlderPackets}
           onLoadNewer={loadNewerPackets}
         />
+      }>
         <PacketDetails
           packet={details.data}
           loading={details.isFetching}
-          error={details.error}
+          error={details.error && !isSessionAuthenticationError(details.error) ? details.error : null}
           expanded={packetDetailsExpanded}
           onExpandedChange={setPacketDetailsExpanded}
         />
-      </div>
+      </PacketSplit>
 
       <SavedFiltersModal
         open={savedFiltersOpen}

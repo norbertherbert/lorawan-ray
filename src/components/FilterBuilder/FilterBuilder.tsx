@@ -70,6 +70,7 @@ interface FilterBuilderProps {
   packetErrorRates?: Array<{ devAddr: string; percentage: number | null }>;
   filterPrefill?: FilterPrefill | null;
   onApply: (draft: FilterDraft, filters: UplinkFilters | undefined) => void;
+  onReset: (draft: FilterDraft) => void;
   onOpenSavedFilters: () => void;
   onEditSavedFilters: () => void;
   onSaveAs: (draft: FilterDraft, filters: UplinkFilters | undefined) => void;
@@ -93,6 +94,7 @@ export default function FilterBuilder({
   packetErrorRates,
   filterPrefill,
   onApply,
+  onReset,
   onOpenSavedFilters,
   onEditSavedFilters,
   onSaveAs,
@@ -161,7 +163,7 @@ export default function FilterBuilder({
     const cleared = { ...EMPTY_FILTERS, filterType: draft.filterType };
     setDraft(cleared);
     setValidationError('');
-    onApply(cleared, undefined);
+    onReset(cleared);
   }
 
   function changeFilterType(nextType: SavedFilterType) {
@@ -173,15 +175,13 @@ export default function FilterBuilder({
     const cleared = { ...EMPTY_FILTERS, filterType: nextType };
     setDraft(cleared);
     setValidationError('');
-    onApply(cleared, undefined);
+    onReset(cleared);
   }
 
   return (
-    <>
-      <Button
+    <div className="analyzer-filter-accordion">
+      <button
         className="analyzer-filter-toggle"
-        color="light"
-        size="xs"
         type="button"
         aria-controls="analyzer-filter-panel"
         aria-expanded={expanded}
@@ -191,6 +191,16 @@ export default function FilterBuilder({
           <path d="M4 5h16l-6.5 7.2v5.3l-3 1.5v-6.8L4 5Z" />
         </svg>
         <span className="analyzer-filter-toggle-label">Filter:</span>
+        {activeFilterName ? (
+          <Badge className="active-filter-label filter-name-label" color="success" size="xs">{activeFilterName}</Badge>
+        ) : hasCriteria ? (
+          <Badge className="active-filter-label filter-unsaved-label" color="warning" size="xs">Unsaved</Badge>
+        ) : (
+          <Badge className="active-filter-label filter-empty-label" color="gray" size="xs">Empty</Badge>
+        )}
+        {savedFilterIsModified ? (
+          <Badge className="active-filter-label filter-unsaved-label" color="warning" size="xs">Unsaved</Badge>
+        ) : null}
         {draft.filterType !== 'sniffer' && !hasUnappliedChanges
           ? packetErrorRates?.map(({ devAddr, percentage }) => (
             <Badge key={devAddr} className="active-filter-label filter-per-label" color="purple" size="xs">
@@ -199,16 +209,6 @@ export default function FilterBuilder({
             </Badge>
           ))
           : null}
-        {savedFilterIsModified ? (
-          <Badge className="active-filter-label filter-unsaved-label" color="warning" size="xs">Unsaved</Badge>
-        ) : null}
-        {activeFilterName ? (
-          <Badge className="active-filter-label filter-name-label" color="success" size="xs">{activeFilterName}</Badge>
-        ) : hasCriteria ? (
-          <Badge className="active-filter-label filter-unsaved-label" color="warning" size="xs">Unsaved</Badge>
-        ) : (
-          <Badge className="active-filter-label filter-empty-label" color="gray" size="xs">Empty</Badge>
-        )}
         <svg
           className={`analyzer-filter-chevron${expanded ? ' is-expanded' : ''}`}
           viewBox="0 0 20 20"
@@ -216,7 +216,7 @@ export default function FilterBuilder({
         >
           <path d="m5 7.5 5 5 5-5" />
         </svg>
-      </Button>
+      </button>
       {expanded ? (
         <div className="analyzer-filter-panel" id="analyzer-filter-panel">
           <form onSubmit={apply}>
@@ -327,7 +327,7 @@ export default function FilterBuilder({
           </form>
         </div>
       ) : null}
-    </>
+    </div>
   );
 }
 

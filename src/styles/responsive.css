@@ -5,26 +5,29 @@
   }
 
   .analyzer-workspace {
-    display: block;
+    flex: 0 0 auto;
+    height: 75dvh;
   }
 
   .packet-grid-scroll {
-    height: min(255px, 45vh);
+    height: auto;
   }
 
   .packet-details {
-    margin-top: 16px;
-    overflow: visible;
+    margin-top: 0;
+    overflow: hidden;
   }
 
   .packet-details-columns {
     grid-template-columns: 1fr;
     grid-template-rows: none;
+    overflow-y: auto;
   }
 
   .protocol-tree,
   .packet-raw-pane {
     overflow-y: visible;
+    min-height: min-content;
     scrollbar-gutter: auto;
   }
 }

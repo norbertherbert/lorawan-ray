@@ -1,13 +1,50 @@
 .analyzer-workspace {
   display: grid;
   flex: 1 1 auto;
-  grid-template-rows: minmax(160px, 255px) minmax(240px, 1fr);
-  gap: 6px;
-  min-height: 0;
+  grid-template-rows: minmax(160px, 1fr) 12px minmax(240px, 1fr);
+  gap: 0;
+  min-height: 412px;
 }
 
 .analyzer-workspace.details-collapsed {
   grid-template-rows: minmax(160px, 1fr) auto;
+  gap: 6px;
+  min-height: 210px;
+}
+
+.packet-split-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: row-resize;
+  touch-action: none;
+  user-select: none;
+  border-radius: 3px;
+}
+
+.packet-split-handle span {
+  width: 40px;
+  height: 3px;
+  border-radius: 2px;
+  background: #9ca3af;
+}
+
+.packet-split-handle:hover,
+.packet-split-handle:focus-visible,
+.is-resizing .packet-split-handle {
+  background: #dbeafe;
+  outline: none;
+}
+
+.dark .packet-split-handle:hover,
+.dark .packet-split-handle:focus-visible,
+.dark .is-resizing .packet-split-handle {
+  background: #374151;
+}
+
+.analyzer-workspace.is-resizing {
+  user-select: none;
+  cursor: row-resize;
 }
 
 .packet-grid {
