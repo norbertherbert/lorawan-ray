@@ -4,11 +4,11 @@ on:
   push:
     branches: [main]
     paths:
-      - "lorawan-ray-collector/**"
+      - "lora-manta-collector/**"
       - ".github/workflows/collector.yml"
   pull_request:
     paths:
-      - "lorawan-ray-collector/**"
+      - "lora-manta-collector/**"
       - ".github/workflows/collector.yml"
   workflow_dispatch:
 
@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: lorawan-ray-collector
+        working-directory: lora-manta-collector
     steps:
       - name: Checkout
         uses: actions/checkout@v6

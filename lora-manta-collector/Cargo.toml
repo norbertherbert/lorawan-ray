@@ -1,5 +1,5 @@
 [package]
-name = "lorawan-ray-collector"
+name = "lora-manta-collector"
 version = "0.1.0"
 edition = "2021"
 

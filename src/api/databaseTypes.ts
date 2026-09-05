@@ -3,7 +3,7 @@
  *
  * These types describe rows returned directly to the authenticated browser,
  * before the data-source adapter maps them to the UI-oriented camelCase types
- * in api/types.ts. They intentionally mirror lorawan-ray-collector/init_db.surql
+ * in api/types.ts. They intentionally mirror lora-manta-collector/init_db.surql
  * rather than the former schemaless gateway_rxpk documents.
  */
 

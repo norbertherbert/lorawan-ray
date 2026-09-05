@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - "lorawan-ray-collector/**"
+      - "lora-manta-collector/**"
   workflow_dispatch:
 
 permissions:

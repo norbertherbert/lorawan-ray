@@ -698,12 +698,16 @@
   line-height: 1.1;
 }
 
-.analyzer-page-size > div {
+.analyzer-page-size > .analyzer-row-count-select {
   width: 72px;
 }
 
 .analyzer-page-size > .analyzer-column-picker {
   width: auto;
+}
+
+.rows-tooltip {
+  white-space: nowrap;
 }
 
 .analyzer-page-size select {

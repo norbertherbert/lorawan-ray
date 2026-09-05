@@ -33,7 +33,7 @@ const useMockData = import.meta.env.VITE_USE_MOCK_DATA === 'true';
 
 function initialDarkMode() {
   try {
-    const savedTheme = window.localStorage.getItem('lorawan-ray-theme');
+    const savedTheme = window.localStorage.getItem('lora-manta-theme');
     if (savedTheme === 'dark' || savedTheme === 'light') {
       const dark = savedTheme === 'dark';
       document.documentElement.classList.toggle('dark', dark);
@@ -99,7 +99,7 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
     try {
-      window.localStorage.setItem('lorawan-ray-theme', darkMode ? 'dark' : 'light');
+      window.localStorage.setItem('lora-manta-theme', darkMode ? 'dark' : 'light');
     } catch {
       // The selected theme still applies for this page session.
     }
@@ -536,10 +536,10 @@ export default function App() {
     <>
       <Navbar fluid border className="app-navbar">
         <NavbarBrand as="a" className="brand" href={import.meta.env.BASE_URL}>
-          <h1>LoRaWAN Ray</h1>
+          <h1>LoRa Manta</h1>
           <img
             className="brand-mark"
-            src={`${import.meta.env.BASE_URL}lorawan-ray-mark.png`}
+            src={`${import.meta.env.BASE_URL}lora-manta-mark.png`}
             alt=""
             aria-hidden="true"
           />

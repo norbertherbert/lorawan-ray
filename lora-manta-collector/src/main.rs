@@ -22,9 +22,9 @@ const TX_ACK: u8 = 0x05;
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "lorawan-ray-collector",
+    name = "lora-manta-collector",
     version,
-    about = "Collect Semtech UDP Packet Forwarder uplinks for LoRaWAN Ray",
+    about = "Collect Semtech UDP Packet Forwarder uplinks for LoRa Manta",
     group(
         ArgGroup::new("password_source")
             .required(true)
@@ -1101,7 +1101,7 @@ async fn main() -> Result<()> {
     log_info(
         config.log_level,
         format_args!(
-            "lorawan-ray-collector listening for Semtech UDP Packet Forwarder datagrams on {}",
+            "lora-manta-collector listening for Semtech UDP Packet Forwarder datagrams on {}",
             config.bind
         ),
     );
@@ -1142,7 +1142,7 @@ mod tests {
     #[test]
     fn parses_required_arguments_with_requested_defaults() {
         let args = Args::try_parse_from([
-            "lorawan-ray-collector",
+            "lora-manta-collector",
             "-d",
             "https://example.surreal.cloud",
             "-u",
@@ -1163,7 +1163,7 @@ mod tests {
     #[test]
     fn enables_gateway_stats_and_debug_logging_from_arguments() {
         let args = Args::try_parse_from([
-            "lorawan-ray-collector",
+            "lora-manta-collector",
             "--destination",
             "https://example.surreal.cloud",
             "--username",
@@ -1198,13 +1198,13 @@ mod tests {
     #[test]
     fn reads_password_from_file() {
         let path = std::env::temp_dir().join(format!(
-            "lorawan-ray-collector-password-{}",
+            "lora-manta-collector-password-{}",
             std::process::id()
         ));
         fs::write(&path, "file-secret\r\n").unwrap();
 
         let args = Args::try_parse_from([
-            "lorawan-ray-collector",
+            "lora-manta-collector",
             "--destination",
             "https://example.surreal.cloud",
             "--username",

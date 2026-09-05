@@ -37,7 +37,7 @@ const NEWEST_FIRST_SORTING: UplinkSort[] = [{ field: 'observedAt', direction: 'd
 const COLUMN_PREFERENCES_VERSION = 1;
 
 function columnPreferencesKey(userId: string) {
-  return `lorawan-ray.sniffer-columns.v${COLUMN_PREFERENCES_VERSION}:${userId}`;
+  return `lora-manta.sniffer-columns.v${COLUMN_PREFERENCES_VERSION}:${userId}`;
 }
 
 function loadColumnVisibility(userId: string): ColumnVisibilityState {
@@ -531,8 +531,11 @@ export default function Analyzer({
               </DropdownItem>
             </Dropdown>
           </div>
-          <Label htmlFor="packet-page-size">Rows</Label>
+          <Tooltip className="rows-tooltip" content="Number of packets loaded at a time while scrolling.">
+            <Label htmlFor="packet-page-size">Rows</Label>
+          </Tooltip>
           <Select
+            className="analyzer-row-count-select"
             sizing="sm"
             id="packet-page-size"
             value={batchSize}
@@ -657,5 +660,5 @@ function csvExportFilename(now = new Date()) {
   const time = [now.getHours(), now.getMinutes()]
     .map((part) => String(part).padStart(2, '0'))
     .join('');
-  return `lorawan-ray-packets-${date}-${time}.csv`;
+  return `lora-manta-packets-${date}-${time}.csv`;
 }

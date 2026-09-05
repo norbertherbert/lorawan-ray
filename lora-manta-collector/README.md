@@ -1,6 +1,6 @@
-# LoRaWAN Ray Collector
+# LoRa Manta Collector
 
-`lorawan-ray-collector` is the ingestion component of the **LoRaWAN Ray** solution.
+`lora-manta-collector` is the ingestion component of the **LoRa Manta** solution.
 It acts as a local LNS endpoint for the Semtech UDP Packet Forwarder protocol
 v2, listens on UDP, acknowledges `PUSH_DATA` and `PULL_DATA` packets
 immediately, and writes uplink packets to SurrealDB Cloud over HTTPS.
@@ -125,13 +125,13 @@ is the HTTPS instance endpoint without `/sql` at the end. The defaults are:
 - `--log-level info`
 
 Valid log levels are `error`, `info`, and `debug`. Run
-`lorawan-ray-collector --help` (or `cargo run -- --help`) for the complete
+`lora-manta-collector --help` (or `cargo run -- --help`) for the complete
 interface.
 
 To read the password from a file instead of passing it directly:
 
 ```bash
-./lorawan-ray-collector \
+./lora-manta-collector \
   --destination https://example.surreal.cloud \
   --username gw_647FDAFFFE005E17 \
   --password-file /path/to/password
@@ -288,7 +288,7 @@ Run [`init_db.surql`](init_db.surql) from an administrator session, then provisi
 Configure the process using arguments:
 
 ```bash
-./lorawan-ray-collector \
+./lora-manta-collector \
   --destination https://<instance>.surreal.cloud \
   --username 1032547698BADCFE \
   --password '<password>'
@@ -301,16 +301,16 @@ Configure the process using arguments:
 The latest published ARMv7 collector is available from GitHub Releases:
 
 ```text
-https://github.com/norbertherbert/lorawan-ray/releases/latest/download/lorawan-ray-collector
+https://github.com/norbertherbert/lorawan-ray/releases/latest/download/lora-manta-collector
 ```
 
 Download and verify it on the gateway:
 
 ```bash
-curl -LO https://github.com/norbertherbert/lorawan-ray/releases/latest/download/lorawan-ray-collector
-curl -LO https://github.com/norbertherbert/lorawan-ray/releases/latest/download/lorawan-ray-collector.sha256
-sha256sum -c lorawan-ray-collector.sha256
-chmod +x lorawan-ray-collector
+curl -LO https://github.com/norbertherbert/lorawan-ray/releases/latest/download/lora-manta-collector
+curl -LO https://github.com/norbertherbert/lorawan-ray/releases/latest/download/lora-manta-collector.sha256
+sha256sum -c lora-manta-collector.sha256
+chmod +x lora-manta-collector
 ```
 
 Releases are built automatically from tags named `collector-v*`. To publish
@@ -342,15 +342,15 @@ cross build --release --target armv7-unknown-linux-musleabihf
 The resulting binary is:
 
 ```text
-target/armv7-unknown-linux-musleabihf/release/lorawan-ray-collector
+target/armv7-unknown-linux-musleabihf/release/lora-manta-collector
 ```
 
 Verify its architecture and record its checksum before copying it to the
 gateway:
 
 ```bash
-file target/armv7-unknown-linux-musleabihf/release/lorawan-ray-collector
-sha256sum target/armv7-unknown-linux-musleabihf/release/lorawan-ray-collector
+file target/armv7-unknown-linux-musleabihf/release/lora-manta-collector
+sha256sum target/armv7-unknown-linux-musleabihf/release/lora-manta-collector
 ```
 
 `file` should report a 32-bit ARM executable. The musl target produces a

@@ -13,8 +13,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'rea
 import type { UplinkSummary } from '../../api/types.ts';
 import { PACKET_COLUMN_OPTIONS } from '../../api/packetColumns.ts';
 import {
-  ArrowRightEndOnRectangleIcon,
-  ArrowRightStartOnRectangleIcon,
+  ArrowDownToBracketFlippedIcon,
+  ArrowUpFromBracketIcon,
   FunnelIcon,
 } from '../Icons.jsx';
 import { formatDate } from '../../lib.js';
@@ -324,14 +324,14 @@ function TimestampCell({
             hint="Copy to filter as From"
             onClick={() => onFilterStart(value)}
           >
-            <ArrowRightStartOnRectangleIcon />
+            <ArrowUpFromBracketIcon />
           </TableFilterButton>
           <TableFilterButton
             label={`Copy ${displayValue} to filter as To`}
             hint="Copy to filter as To"
             onClick={() => onFilterEnd(value)}
           >
-            <ArrowRightEndOnRectangleIcon />
+            <ArrowDownToBracketFlippedIcon />
           </TableFilterButton>
         </span>
       ) : null}

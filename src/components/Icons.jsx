@@ -56,20 +56,18 @@ export function TrashIcon() {
   );
 }
 
-export function ArrowRightStartOnRectangleIcon() {
+export function ArrowUpFromBracketIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" aria-hidden="true" focusable="false">
-      <path d="M10.5 6h-6A2.25 2.25 0 0 0 2.25 8.25v7.5A2.25 2.25 0 0 0 4.5 18h6" />
-      <path d="m13.5 9 3 3m0 0-3 3m3-3H7.5" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" aria-hidden="true" focusable="false">
+      <path d="M4 15v2a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-2M12 4v12m0-12 4 4m-4-4L8 8" />
     </svg>
   );
 }
 
-export function ArrowRightEndOnRectangleIcon() {
+export function ArrowDownToBracketFlippedIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" aria-hidden="true" focusable="false">
-      <path d="M13.5 6h6a2.25 2.25 0 0 1 2.25 2.25v7.5A2.25 2.25 0 0 1 19.5 18h-6" />
-      <path d="m10.5 9 3 3m0 0-3 3m3-3H4.5" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" aria-hidden="true" focusable="false">
+      <path transform="rotate(180 12 12)" d="M4 15v2a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-2m-8 1V4m0 12-4-4m4 4 4-4" />
     </svg>
   );
 }

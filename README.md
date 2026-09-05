@@ -1,18 +1,18 @@
-# LoRaWAN Ray
+# LoRa Manta
 
-This repository contains the **LoRaWAN Ray** packet collection and analysis
+This repository contains the **LoRa Manta** packet collection and analysis
 solution:
 
-- [`lorawan-ray-webui`](package.json) is the React-based, read-only packet
-  analyzer displayed as **LoRaWAN Ray**. It is built with Vite and deployed to
+- [`lora-manta-webui`](package.json) is the React-based, read-only packet
+  analyzer displayed as **LoRa Manta**. It is built with Vite and deployed to
   GitHub Pages.
-- [`lorawan-ray-collector`](lorawan-ray-collector/README.md) receives Semtech
+- [`lora-manta-collector`](lora-manta-collector/README.md) receives Semtech
   UDP Packet Forwarder traffic, normalizes LoRaWAN uplinks and gateway radio
   metadata, and stores them in SurrealDB Cloud.
 - [`worker`](worker/) contains the authentication-only Cloudflare Worker.
 - [`surreal`](surreal/) contains the Web UI authentication and authorization
   schema. The collector owns the packet schema in
-  [`lorawan-ray-collector/init_db.surql`](lorawan-ray-collector/init_db.surql).
+  [`lora-manta-collector/init_db.surql`](lora-manta-collector/init_db.surql).
 
 The Web UI supports administrator approval and single-use invitations. The
 Cloudflare Worker verifies Google ID tokens and exchanges them for 15-minute
@@ -63,7 +63,7 @@ This exact value is shared only between the Worker and SurrealDB. Never put it i
 Open [surreal/schema.surql](surreal/schema.surql) and make a temporary, untracked copy. In that copy:
 
 1. Run the
-   [collector schema](lorawan-ray-collector/init_db.surql) in
+   [collector schema](lora-manta-collector/init_db.surql) in
    `NS lorawan DB ray` first so `gateway_reception` and `lorawan_uplink` exist.
 2. Replace `__SURREAL_JWT_SECRET__` with the secret from step 1.
 3. Replace `__TOKEN_ISSUER__` with `tiny-tasks-auth`.
@@ -74,7 +74,7 @@ Open [surreal/schema.surql](surreal/schema.surql) and make a temporary, untracke
 
 The schema creates deterministic `user:google_<google-sub>` records at first
 login. The collector's
-[`init_db.surql`](lorawan-ray-collector/init_db.surql) owns normalized
+[`init_db.surql`](lora-manta-collector/init_db.surql) owns normalized
 packet-table permissions: approved Google users may select logical uplinks and
 receptions, while gateway-specific creation is preserved and browser users
 cannot create, update, or delete packet records.

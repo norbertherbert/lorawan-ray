@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: lorawan-ray-collector
+        working-directory: lora-manta-collector
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -42,18 +42,18 @@ jobs:
       - name: Package release files
         run: |
           install -D -m 0755 \
-            "target/$COLLECTOR_TARGET/release/lorawan-ray-collector" \
-            release/lorawan-ray-collector
+            "target/$COLLECTOR_TARGET/release/lora-manta-collector" \
+            release/lora-manta-collector
           cd release
-          sha256sum lorawan-ray-collector > lorawan-ray-collector.sha256
-          file lorawan-ray-collector
+          sha256sum lora-manta-collector > lora-manta-collector.sha256
+          file lora-manta-collector
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            release/lorawan-ray-collector \
-            release/lorawan-ray-collector.sha256 \
+            release/lora-manta-collector \
+            release/lora-manta-collector.sha256 \
             --verify-tag \
             --generate-notes \
-            --title "LoRaWAN Ray Collector $GITHUB_REF_NAME"
+            --title "LoRa Manta Collector $GITHUB_REF_NAME"

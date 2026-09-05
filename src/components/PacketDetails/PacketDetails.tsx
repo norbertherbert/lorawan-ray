@@ -148,5 +148,5 @@ function groupHex(value: string): string {
 }
 
 function flagValue(value: boolean): string {
-  return value ? '1 (set)' : '0 (not set)';
+  return value ? 'True' : 'False';
 }
