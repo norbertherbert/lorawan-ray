@@ -59,6 +59,31 @@ test('uses opaque keyset cursors for forward and backward pages', async () => {
   assert.equal(client.calls[2].variables.cursor_record_key, 'two');
 });
 
+test('loads newly arrived packets above the initial newest cursor without overlapping older rows', async () => {
+  const timestamp = 1_777_800_000_000;
+  const old = searchRow('old', timestamp);
+  const newer = searchRow('newer', timestamp + 1000);
+  const newest = searchRow('newest', timestamp + 2000);
+  // Backward queries return ascending rows; the adapter restores newest-first order.
+  const client = scriptedClient([[[old]], [[newer, newest]], [[]]]);
+  const source = new SurrealUplinkDataSource(client);
+  const filters = { packet: { devAddrs: ['040306A0'] } };
+  const initial = await source.search({ page: { limit: 25 }, filters });
+  assert.equal(initial.pageInfo.hasPreviousPage, false);
+
+  const added = await source.search({
+    page: { limit: 25, before: initial.pageInfo.startCursor }, filters,
+  });
+  assert.deepEqual([...added.items, ...initial.items].map(({ id }) => id), ['newest', 'newer', 'old']);
+  assert.match(client.calls[1].query, /time::millis\(observed_at\) > \$cursor_0/);
+  assert.deepEqual(client.calls[1].variables.dev_addrs, ['040306A0']);
+
+  const empty = await source.search({
+    page: { limit: 25, before: added.pageInfo.startCursor }, filters,
+  });
+  assert.deepEqual(empty.items, []);
+});
+
 test('calculates PER from all unique matching frame counters', async () => {
   const client = scriptedClient([[[100, 101, 103, 103]]]);
   const source = new SurrealUplinkDataSource(client);

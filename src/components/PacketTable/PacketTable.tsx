@@ -9,7 +9,7 @@ import {
 } from '@tanstack/react-table';
 import { Spinner, Tooltip } from 'flowbite-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import type { UplinkSummary } from '../../api/types.ts';
 import { PACKET_COLUMN_OPTIONS } from '../../api/packetColumns.ts';
 import {
@@ -86,6 +86,7 @@ interface PacketTableProps {
   rowSelection: RowSelectionState;
   loading: boolean;
   loadingMore: boolean;
+  loadingNewer: boolean;
   hasMore: boolean;
   scrollResetVersion: number;
   showFilterActions: boolean;
@@ -99,6 +100,7 @@ interface PacketTableProps {
   onRowSelectionChange: (updater: RowSelectionState | ((current: RowSelectionState) => RowSelectionState)) => void;
   onRowDoubleClick: (row: UplinkSummary) => void;
   onLoadMore: () => void;
+  onLoadNewer: () => void;
 }
 
 export default function PacketTable({
@@ -107,6 +109,7 @@ export default function PacketTable({
   rowSelection,
   loading,
   loadingMore,
+  loadingNewer,
   hasMore,
   scrollResetVersion,
   showFilterActions,
@@ -118,8 +121,13 @@ export default function PacketTable({
   onRowSelectionChange,
   onRowDoubleClick,
   onLoadMore,
+  onLoadNewer,
 }: PacketTableProps) {
   const scrollElement = useRef<HTMLDivElement>(null);
+  const lastNewerRequest = useRef(0);
+  const previousScrollTop = useRef(0);
+  const touchY = useRef<number | null>(null);
+  const prependAnchor = useRef<{ id: string; offset: number } | null>(null);
   const columns = useMemo(
     () => createColumns(
       showFilterActions,
@@ -156,21 +164,41 @@ export default function PacketTable({
     : 0;
   const visibleColumnCount = table.getVisibleLeafColumns().length;
 
+  function requestNewerPackets() {
+    if (loadingNewer || loadingMore || loading || Date.now() - lastNewerRequest.current < 1500) return;
+    lastNewerRequest.current = Date.now();
+    const top = scrollElement.current?.scrollTop ?? 0;
+    const anchor = virtualRows.find((row) => row.end > top);
+    prependAnchor.current = anchor && rows[anchor.index]
+      ? { id: rows[anchor.index].id, offset: top - anchor.start }
+      : null;
+    onLoadNewer();
+  }
+
+  useLayoutEffect(() => {
+    const anchor = prependAnchor.current;
+    if (!anchor || loadingNewer) return;
+    const index = rows.findIndex((row) => row.id === anchor.id);
+    if (index >= 0) {
+      const offset = rowVirtualizer.getOffsetForIndex(index, 'start');
+      if (offset) rowVirtualizer.scrollToOffset(offset[0] + anchor.offset);
+    }
+    prependAnchor.current = null;
+  }, [data, loadingNewer, rowVirtualizer, rows]);
+
   useEffect(() => {
+    prependAnchor.current = null;
+    previousScrollTop.current = 0;
     scrollElement.current?.scrollTo({ top: 0 });
   }, [scrollResetVersion]);
 
-  useEffect(() => {
-    const lastVirtualRow = virtualRows[virtualRows.length - 1];
-    if (
-      lastVirtualRow &&
-      lastVirtualRow.index >= rows.length - 5 &&
-      hasMore &&
-      !loadingMore
-    ) {
+  function requestOlderPackets() {
+    const element = scrollElement.current;
+    if (element && hasMore && !loading && !loadingMore && !loadingNewer &&
+      element.scrollHeight - element.scrollTop - element.clientHeight <= 125) {
       onLoadMore();
     }
-  }, [hasMore, loadingMore, onLoadMore, rows.length, virtualRows]);
+  }
 
   return (
     <div className={`packet-grid${loading ? ' is-loading' : ''}`}>
@@ -179,7 +207,31 @@ export default function PacketTable({
         className="packet-grid-scroll"
         tabIndex={0}
         aria-label="Scrollable packet table"
+        onScroll={(event) => {
+          const top = event.currentTarget.scrollTop;
+          if (top < previousScrollTop.current && top <= 40) requestNewerPackets();
+          if (top > previousScrollTop.current) requestOlderPackets();
+          previousScrollTop.current = top;
+        }}
+        onWheel={(event) => {
+          if (event.deltaY < 0 && event.currentTarget.scrollTop <= 40) requestNewerPackets();
+          if (event.deltaY > 0) requestOlderPackets();
+        }}
+        onTouchStart={(event) => { touchY.current = event.touches[0]?.clientY ?? null; }}
+        onTouchMove={(event) => {
+          const y = event.touches[0]?.clientY;
+          if (y !== undefined && touchY.current !== null && y > touchY.current && event.currentTarget.scrollTop <= 40) {
+            requestNewerPackets();
+          }
+          if (y !== undefined && touchY.current !== null && y < touchY.current) requestOlderPackets();
+          touchY.current = y ?? null;
+        }}
       >
+        <div className="packet-load-more">
+          <button type="button" onClick={requestNewerPackets} disabled={loadingNewer || loadingMore || loading}>
+            {loadingNewer ? <><Spinner size="xs" aria-hidden="true" /> Loading newer packets…</> : 'Load newer packets'}
+          </button>
+        </div>
         <table aria-label="LoRaWAN uplink packets">
           <thead>
             {table.getHeaderGroups().map((group) => (

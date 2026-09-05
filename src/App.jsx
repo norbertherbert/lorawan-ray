@@ -22,7 +22,6 @@ import {
   hashInvitationToken,
   isSessionAuthenticationError,
   jwtExpirationTime,
-  jwtLifetimeMs,
   loadGoogleIdentityScript,
 } from './lib.js';
 import { mockUplinkDataSource } from './api/mockUplinks.ts';
@@ -82,6 +81,7 @@ export default function App() {
   const [selfRegistrationEnabled, setSelfRegistrationEnabled] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
+  const [restoringSession, setRestoringSession] = useState(true);
   const [approvalBusy, setApprovalBusy] = useState(false);
   const [adminRefreshing, setAdminRefreshing] = useState(false);
   const [logoutBusy, setLogoutBusy] = useState(false);
@@ -142,6 +142,7 @@ export default function App() {
     queryClient.removeQueries({ queryKey: ['uplinks'] });
     queryClient.removeQueries({ queryKey: ['uplink'] });
     queryClient.removeQueries({ queryKey: ['saved-filters'] });
+    queryClient.removeQueries({ queryKey: ['packet-error-rates'] });
     clearSessionExpiry();
     setSignedInUser(null);
     setCurrentProfile(null);
@@ -150,13 +151,17 @@ export default function App() {
     setActiveInvitations([]);
     setSelfRegistrationEnabled(false);
     setAdminOpen(false);
-    setPerOpen(false);
   }
 
   async function expireSession(cause) {
     if (sessionExpiryHandlingRef.current) return;
     sessionExpiryHandlingRef.current = true;
     if (cause) console.warn('The database session expired.', cause);
+    void fetch(`${config.authBrokerUrl}/auth/logout`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: '{}',
+      signal: AbortSignal.timeout(15000),
+    }).catch(() => {});
 
     try {
       clearSessionExpiry();
@@ -170,12 +175,12 @@ export default function App() {
     }
   }
 
-  function scheduleSessionExpiry(token, advertisedExpiration) {
+  function scheduleSessionExpiry(token, advertisedExpiration, serverTime, receivedAt = Date.now()) {
     clearSessionExpiry();
-    const lifetime = jwtLifetimeMs(token);
     const advertisedExpiresAt = Date.parse(advertisedExpiration || '');
-    const expiresAt = lifetime !== null
-      ? Date.now() + lifetime
+    const serverNow = Date.parse(serverTime || '');
+    const expiresAt = Number.isFinite(serverNow) && Number.isFinite(advertisedExpiresAt)
+      ? receivedAt + (advertisedExpiresAt - serverNow)
       : Number.isFinite(advertisedExpiresAt)
         ? advertisedExpiresAt
         : jwtExpirationTime(token);
@@ -263,13 +268,14 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ credential, invitation: invitationToken || undefined }),
-        credentials: 'omit',
+        credentials: 'include',
       });
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok || typeof result.token !== 'string') {
         throw new Error(result.error || 'The authentication broker rejected this sign-in.');
       }
+      const receivedAt = Date.now();
 
       await db.connect(config.endpoint, {
         reconnect: true,
@@ -277,7 +283,7 @@ export default function App() {
       await db.authenticate(result.token);
 
       const profile = await loadCurrentProfile();
-      scheduleSessionExpiry(result.token, result.expiresAt);
+      scheduleSessionExpiry(result.token, result.expiresAt, result.serverTime, receivedAt);
       setSignedInUser(result.user || null);
       setCurrentProfile(profile);
       setInvitationToken(null);
@@ -311,6 +317,7 @@ export default function App() {
     ].filter(Boolean);
 
     if (missing.length) {
+      setRestoringSession(false);
       setStatus({ state: 'offline', text: 'Setup required' });
       setError(
         `Missing ${missing.join(' and ')}. Copy .env.example to .env.local and add the deployment values.`,
@@ -319,6 +326,42 @@ export default function App() {
     }
 
     let cancelled = false;
+    const controller = new AbortController();
+    const restoreTimeout = window.setTimeout(() => controller.abort(), 15000);
+    async function restoreLogin() {
+      try {
+        // An invitation requires an explicit sign-in by the invited account.
+        if (initialInvitation.token) return;
+        const response = await fetch(`${config.authBrokerUrl}/auth/session`, {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' }, body: '{}',
+          signal: controller.signal,
+        });
+        if (cancelled || response.status === 401) return;
+        const result = await response.json();
+        if (!response.ok || typeof result.token !== 'string') {
+          throw new Error(result.error || 'The session could not be restored.');
+        }
+        const receivedAt = Date.now();
+        await db.connect(config.endpoint, { reconnect: true });
+        if (cancelled) return;
+        await db.authenticate(result.token);
+        const profile = await loadCurrentProfile();
+        if (cancelled) return;
+        scheduleSessionExpiry(result.token, result.expiresAt, result.serverTime, receivedAt);
+        setSignedInUser(result.user || null);
+        setCurrentProfile(profile);
+      } catch (cause) {
+        if (!cancelled) {
+          await db.close().catch(() => {});
+          reportError(cause, 'Could not restore your session. Please sign in again.');
+        }
+      } finally {
+        window.clearTimeout(restoreTimeout);
+        if (!cancelled) setRestoringSession(false);
+      }
+    }
+    void restoreLogin();
     loadGoogleIdentityScript()
       .then(() => {
         if (cancelled) return;
@@ -340,6 +383,8 @@ export default function App() {
 
     return () => {
       cancelled = true;
+      controller.abort();
+      window.clearTimeout(restoreTimeout);
       googleInitializedRef.current = false;
       clearSessionExpiry();
       window.removeEventListener('pagehide', closeConnection);
@@ -380,15 +425,21 @@ export default function App() {
     setLogoutBusy(true);
 
     try {
+      const response = await fetch(`${config.authBrokerUrl}/auth/logout`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }, body: '{}',
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!response.ok) throw new Error('Could not clear the saved session. Please retry Logout.');
       await db.invalidate().catch(() => {});
-      await db.close();
-    } catch (cause) {
-      reportError(cause, 'The connection could not be closed cleanly.');
-    } finally {
+      await db.close().catch(() => {});
       window.google?.accounts?.id?.disableAutoSelect();
       resetAuthenticatedState();
-      setLogoutBusy(false);
       setStatus({ state: 'offline', text: 'Signed out' });
+    } catch (cause) {
+      reportError(cause, 'Could not sign out.');
+    } finally {
+      setLogoutBusy(false);
     }
   }
 
@@ -545,7 +596,8 @@ export default function App() {
 
       <main className={`shell${approved && !adminOpen ? ' analyzer-shell' : ''}`}>
 
-        <Card className="connection-card" hidden={Boolean(currentProfile)}>
+        {restoringSession ? <Card><p role="status">Restoring session…</p></Card> : null}
+        <Card className="connection-card" hidden={Boolean(currentProfile) || restoringSession}>
           <h2 className="text-lg font-bold tracking-tight text-gray-900">Sign in</h2>
 
           <div className="google-signin">

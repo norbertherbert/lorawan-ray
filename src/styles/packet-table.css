@@ -24,6 +24,7 @@
 }
 
 .packet-grid-scroll {
+  overscroll-behavior-y: contain;
   flex: 1 1 auto;
   width: 100%;
   min-height: 0;

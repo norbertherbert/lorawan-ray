@@ -1,4 +1,5 @@
 html {
+  overscroll-behavior-y: none;
   overflow-x: hidden;
   overflow-y: scroll;
   scrollbar-color: #858680 #eeede7;

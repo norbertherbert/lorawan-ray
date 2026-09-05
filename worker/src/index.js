@@ -1,4 +1,5 @@
 import { SignJWT, createRemoteJWKSet, jwtVerify } from 'jose';
+import { createSessionCookie, restoreSession, clearSessionCookie } from './session.js';
 
 const googleKeys = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 const encoder = new TextEncoder();
@@ -14,12 +15,36 @@ export default {
         : json({ error: 'Origin is not allowed.' }, 403);
     }
 
-    if (request.method !== 'POST' || new URL(request.url).pathname !== '/auth/google') {
+    const path = new URL(request.url).pathname;
+    if (request.method !== 'POST' || !['/auth/google', '/auth/session', '/auth/logout'].includes(path)) {
       return json({ error: 'Not found.' }, 404, origin, env);
     }
 
     if (!isAllowedOrigin(origin, env)) {
       return json({ error: 'Origin is not allowed.' }, 403);
+    }
+
+    if (!request.headers.get('Content-Type')?.toLowerCase().startsWith('application/json')) {
+      return json({ error: 'JSON requests are required.' }, 415, origin, env);
+    }
+
+    if (path === '/auth/logout') {
+      const response = json({ signedOut: true }, 200, origin, env);
+      response.headers.set('Set-Cookie', clearSessionCookie());
+      return response;
+    }
+
+    if (path === '/auth/session') {
+      try {
+        assertConfiguration(env);
+        const session = await restoreSession(request, origin, env);
+        if (session) return json(session, 200, origin, env);
+      } catch {
+        // Expired, malformed, or foreign-origin cookies cannot restore a session.
+      }
+      const response = json({ error: 'No active session.' }, 401, origin, env);
+      response.headers.set('Set-Cookie', clearSessionCookie());
+      return response;
     }
 
     try {
@@ -54,6 +79,7 @@ export default {
       const normalizedEmail = normalizeEmail(payload.email);
       const invitationHash = invitation ? await hashInvitationToken(invitation) : undefined;
       const expiresInSeconds = SESSION_DURATION_SECONDS;
+      const issuedAt = Math.floor(Date.now() / 1000);
       const token = await new SignJWT({
         ns: env.SURREAL_NAMESPACE,
         db: env.SURREAL_DATABASE,
@@ -69,16 +95,17 @@ export default {
         .setProtectedHeader({ alg: 'HS512', typ: 'JWT' })
         .setIssuer(env.TOKEN_ISSUER)
         .setAudience(env.TOKEN_AUDIENCE)
-        .setIssuedAt()
+        .setIssuedAt(issuedAt)
         .setNotBefore('0s')
-        .setExpirationTime(`${expiresInSeconds}s`)
+        .setExpirationTime(issuedAt + expiresInSeconds)
         .setJti(crypto.randomUUID())
         .sign(encoder.encode(env.SURREAL_JWT_SECRET));
 
-      return json(
+      const response = json(
         {
           token,
-          expiresAt: new Date(Date.now() + expiresInSeconds * 1000).toISOString(),
+          expiresAt: new Date((issuedAt + expiresInSeconds) * 1000).toISOString(),
+          serverTime: new Date().toISOString(),
           user: {
             name: typeof payload.name === 'string' ? payload.name : payload.email,
             email: normalizedEmail,
@@ -89,6 +116,8 @@ export default {
         origin,
         env,
       );
+      response.headers.set('Set-Cookie', await createSessionCookie(token, origin, env));
+      return response;
     } catch (error) {
       console.error('Authentication failed:', {
         name: error instanceof Error ? error.name : 'UnknownError',
@@ -148,6 +177,7 @@ function isAllowedOrigin(origin, env) {
 function corsHeaders(origin) {
   return {
     'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Max-Age': '86400',

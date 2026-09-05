@@ -189,9 +189,14 @@ relative asset URLs, so it works at `/repository-name/` as well as on a custom d
 ## Security properties
 
 - Google tokens are signature-, issuer-, audience-, and expiry-verified by the Worker.
-- The Worker only accepts configured browser origins and returns no cookies.
+- The Worker only accepts configured browser origins and credentialed JSON requests.
 - Surreal tokens and Surreal WebSocket sessions last at most one hour.
-- Tokens remain in memory; the app does not use local storage.
+- The database token stays in app memory. An encrypted HttpOnly, Secure, partitioned cookie
+  on the authentication Worker restores it after a browser reload via `POST /auth/session`.
+  Restoration reuses the original token and expiry; it never grants another hour.
+  Authentication credentials are not stored in localStorage or sessionStorage.
+- `POST /auth/logout` clears the saved cookie. As with the existing database JWT, a copied
+  token remains valid until expiry; clearing the browser cookie is not server-side revocation.
 - SurrealDB record permissions—not the UI—enforce approval, administrator access, invitation
   management, and read-only reception access.
 - The reception table summarizes `ingested_at`, `gateway_id`, `mtype`, `dev_addr`, `fport`, `fcnt`,
@@ -201,3 +206,17 @@ relative asset URLs, so it works at `/repository-name/` as well as on a custom d
 - Users cannot change their own approval or administrator fields.
 - Invitation tokens contain 256 bits of randomness and are stored only as SHA-256 hashes.
 - No root, namespace, or database-user credentials are shipped to the browser.
+
+### Deploying session restoration
+
+Deploy the updated Worker (`npm run worker:deploy`) before deploying the web app, then sign
+in once to establish the cookie. Existing in-memory sessions cannot be restored retroactively.
+No database migration or additional secret is needed: the encryption key is derived from the
+Worker's existing secret, separately from JWT signing. Rotating that secret invalidates cookies.
+
+The hosted Worker must use HTTPS. Cross-site deployments (such as GitHub Pages plus workers.dev)
+use `SameSite=None; Partitioned` cookies for browsers supporting CHIPS, including recent Android
+Chrome. Browsers that block these cookies will still allow Google sign-in but cannot restore it
+after reload. For broader compatibility, host the app and Worker on the same site. Local HTTP
+development relies on the browser's Secure-cookie exception for localhost; other HTTP hosts
+require HTTPS. Logout applies to the cookie for this app/site and browser, not other devices.

@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   functionalUpdate,
   type ColumnVisibilityState,
@@ -74,6 +74,7 @@ export default function Analyzer({
   requireActiveSession,
   onDatabaseError,
 }: AnalyzerProps) {
+  const queryClient = useQueryClient();
   const [batchSize, setBatchSize] = useState(25);
   const [tableResetVersion, setTableResetVersion] = useState(0);
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibilityState>(
@@ -107,18 +108,25 @@ export default function Analyzer({
   ).length;
   const packets = useInfiniteQuery({
     queryKey: ['uplinks', sourceKey, { batchSize, sorting: NEWEST_FIRST_SORTING, filters }],
-    initialPageParam: null as string | null,
-    queryFn: ({ signal, pageParam }) => dataSource.search(
+    initialPageParam: {} as { after?: string; before?: string },
+    queryFn: ({ signal, pageParam, direction }) => dataSource.search(
       {
-        page: { limit: batchSize, ...(pageParam ? { after: pageParam } : {}) },
+        // Refetch starts at the newest packets even after prepending a page.
+        page: { limit: batchSize, ...(direction === 'forward' && pageParam.before ? {} : pageParam) },
         sorting: NEWEST_FIRST_SORTING,
         filters,
       },
       { signal },
     ),
-    getNextPageParam: (lastPage) => (
-      lastPage.pageInfo.hasNextPage ? lastPage.pageInfo.endCursor ?? undefined : undefined
+    getNextPageParam: (lastPage): { after?: string; before?: string } | undefined => (
+      lastPage.pageInfo.hasNextPage && lastPage.pageInfo.endCursor
+        ? { after: lastPage.pageInfo.endCursor } : undefined
     ),
+    // New packets can arrive even when the initial page had no previous page.
+    getPreviousPageParam: (_firstPage, pages): { after?: string; before?: string } | undefined => {
+      const cursor = pages.find((page) => page.items.length)?.pageInfo.startCursor;
+      return cursor ? { before: cursor } : undefined;
+    },
   });
   const packetRows = useMemo(
     () => packets.data?.pages.flatMap(({ items }) => items) ?? [],
@@ -379,13 +387,26 @@ export default function Analyzer({
 
   function refreshPackets() {
     if (requireActiveSession?.() === false) return;
-    void packets.refetch();
+    setRowSelection({});
+    resetPacketList();
+    // Reset removes every retained page/cursor and cancels an in-flight page
+    // request before fetching a fresh first batch with the current filter.
+    void queryClient.resetQueries({
+      queryKey: ['uplinks', sourceKey, { batchSize, sorting: NEWEST_FIRST_SORTING, filters }],
+      exact: true,
+    });
   }
 
   const loadOlderPackets = useCallback(() => {
-    if (!packets.hasNextPage || packets.isFetchingNextPage) return;
-    void packets.fetchNextPage();
-  }, [packets.hasNextPage, packets.isFetchingNextPage, packets.fetchNextPage]);
+    if (!packets.hasNextPage || packets.isFetching) return;
+    void packets.fetchNextPage({ cancelRefetch: false });
+  }, [packets.hasNextPage, packets.isFetching, packets.fetchNextPage]);
+
+  const loadNewerPackets = useCallback(() => {
+    if (packets.isFetching) return;
+    if (packets.hasPreviousPage) void packets.fetchPreviousPage({ cancelRefetch: false });
+    else void packets.refetch();
+  }, [packets.isFetching, packets.hasPreviousPage, packets.fetchPreviousPage, packets.refetch]);
 
   function toggleCsvExport() {
     if (csvExportController.current) {
@@ -554,6 +575,7 @@ export default function Analyzer({
           rowSelection={rowSelection}
           loading={packets.isLoading}
           loadingMore={packets.isFetchingNextPage}
+          loadingNewer={packets.isFetchingPreviousPage}
           hasMore={Boolean(packets.hasNextPage)}
           scrollResetVersion={tableResetVersion}
           showFilterActions={filterExpanded}
@@ -565,6 +587,7 @@ export default function Analyzer({
           onRowSelectionChange={(updater) => setRowSelection((current) => functionalUpdate(updater, current))}
           onRowDoubleClick={() => setPacketDetailsExpanded(true)}
           onLoadMore={loadOlderPackets}
+          onLoadNewer={loadNewerPackets}
         />
         <PacketDetails
           packet={details.data}
