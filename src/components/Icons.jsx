@@ -11,12 +11,34 @@ export function RefreshIcon() {
   );
 }
 
-export function DownloadIcon() {
+export function NewestPacketsIcon() {
   return (
     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" aria-hidden="true" focusable="false">
-      <path d="M12 3v12" />
-      <path d="m7 10 5 5 5-5" />
-      <path d="M5 21h14" />
+      <path d="M3 5h10M3 12h8M3 19h10" />
+      <path d="M18 20V7m-4 4 4-4 4 4" />
+    </svg>
+  );
+}
+
+export function OldestPacketsIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" aria-hidden="true" focusable="false">
+      <path d="M3 5h10M3 12h8M3 19h10" />
+      <path d="M18 4v13m-4-4 4 4 4-4" />
+    </svg>
+  );
+}
+
+export function DownloadIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+      <path
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        d="M12 13V4M7 14H5a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1h-2m-1-5-4 5-4-5m9 8h.01"
+      />
     </svg>
   );
 }

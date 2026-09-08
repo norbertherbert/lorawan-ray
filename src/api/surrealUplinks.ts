@@ -215,7 +215,7 @@ export function buildSearchQuery(request: UplinkSearchRequest): BuiltSearchQuery
   const requestKey = stableStringify({ sorting, filters: request.filters ?? {} });
   const cursorValue = request.page.after ?? request.page.before;
   const cursor = cursorValue ? decodeCursor(cursorValue, requestKey, sorting.length) : null;
-  const backwards = Boolean(request.page.before);
+  const backwards = Boolean(request.page.before || request.page.edge === 'oldest');
   const predicates: string[] = [];
   const variables: Record<string, unknown> = { limit: request.page.limit + 1 };
 
@@ -378,8 +378,8 @@ function validateRequest(request: UplinkSearchRequest): void {
   if (!Number.isInteger(request.page.limit) || request.page.limit < 1 || request.page.limit > MAX_UPLINK_PAGE_SIZE) {
     throw new UplinkDataSourceError('invalid_request', `Page size must be an integer between 1 and ${MAX_UPLINK_PAGE_SIZE}.`);
   }
-  if (request.page.after && request.page.before) {
-    throw new UplinkDataSourceError('invalid_request', 'A page request cannot contain both after and before cursors.');
+  if ((request.page.after && request.page.before) || (request.page.edge && (request.page.after || request.page.before))) {
+    throw new UplinkDataSourceError('invalid_request', 'A page request must use only one cursor or result edge.');
   }
   const sorting = request.sorting ?? [];
   if (sorting.length > 3 || new Set(sorting.map(({ field }) => field)).size !== sorting.length) {

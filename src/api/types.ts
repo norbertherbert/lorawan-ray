@@ -131,6 +131,7 @@ export interface UplinkPageRequest {
   limit: number;
   after?: string;
   before?: string;
+  edge?: 'oldest';
 }
 
 export interface UplinkSearchRequest {

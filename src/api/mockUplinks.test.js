@@ -52,6 +52,16 @@ test('uses stable cursors without overlapping adjacent pages', async () => {
   assert.equal(new Set([...first.items, ...second.items].map(({ id }) => id)).size, 14);
 });
 
+test('loads the oldest batch while preserving newest-first display order', async () => {
+  const source = new MockUplinkDataSource();
+  const all = await source.search({ page: { limit: 500 } });
+  const oldest = await source.search({ page: { limit: 3, edge: 'oldest' } });
+
+  assert.deepEqual(oldest.items, all.items.slice(-3));
+  assert.equal(oldest.pageInfo.hasPreviousPage, true);
+  assert.equal(oldest.pageInfo.hasNextPage, false);
+});
+
 test('applies combined radio filters to the same gateway reception', async () => {
   const source = new MockUplinkDataSource();
   const page = await source.search({

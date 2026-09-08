@@ -30,7 +30,7 @@ import PacketDetails from '../components/PacketDetails/PacketDetails.tsx';
 import PacketSplit from '../components/PacketSplit.tsx';
 import PacketTable from '../components/PacketTable/PacketTable.tsx';
 import { SaveFilterModal, SavedFiltersModal } from '../components/SavedFilters/SavedFiltersModal.tsx';
-import { DownloadIcon, RefreshIcon } from '../components/Icons.jsx';
+import { DownloadIcon, NewestPacketsIcon, OldestPacketsIcon } from '../components/Icons.jsx';
 import { isSessionAuthenticationError } from '../lib.js';
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
@@ -77,6 +77,7 @@ export default function Analyzer({
 }: AnalyzerProps) {
   const queryClient = useQueryClient();
   const [batchSize, setBatchSize] = useState(25);
+  const [packetEdge, setPacketEdge] = useState<'newest' | 'oldest'>('newest');
   const [tableResetVersion, setTableResetVersion] = useState(0);
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibilityState>(
     () => loadColumnVisibility(currentUserId),
@@ -108,8 +109,12 @@ export default function Analyzer({
     ({ id }) => columnVisibility[id] !== false,
   ).length;
   const packets = useInfiniteQuery({
-    queryKey: ['uplinks', sourceKey, { batchSize, sorting: NEWEST_FIRST_SORTING, filters }],
-    initialPageParam: {} as { after?: string; before?: string },
+    queryKey: ['uplinks', sourceKey, { batchSize, sorting: NEWEST_FIRST_SORTING, filters, packetEdge }],
+    initialPageParam: (packetEdge === 'oldest' ? { edge: 'oldest' } : {}) as {
+      after?: string;
+      before?: string;
+      edge?: 'oldest';
+    },
     queryFn: ({ signal, pageParam, direction }) => dataSource.search(
       {
         // Refetch starts at the newest packets even after prepending a page.
@@ -401,14 +406,13 @@ export default function Analyzer({
     if (isSessionAuthenticationError(cause)) onDatabaseError?.(cause, fallback);
   }
 
-  function refreshPackets() {
+  function showPacketEdge(edge: 'newest' | 'oldest') {
     if (requireActiveSession?.() === false) return;
     setRowSelection({});
+    setPacketEdge(edge);
     resetPacketList();
-    // Reset removes every retained page/cursor and cancels an in-flight page
-    // request before fetching a fresh first batch with the current filter.
     void queryClient.resetQueries({
-      queryKey: ['uplinks', sourceKey, { batchSize, sorting: NEWEST_FIRST_SORTING, filters }],
+      queryKey: ['uplinks', sourceKey, { batchSize, sorting: NEWEST_FIRST_SORTING, filters, packetEdge: edge }],
       exact: true,
     });
   }
@@ -575,9 +579,14 @@ export default function Analyzer({
               {exportingCsv ? <Spinner size="sm" aria-hidden="true" /> : <DownloadIcon />}
             </button>
           </Tooltip>
-          <Tooltip content="Refresh packets">
-            <button className="icon-action" type="button" onClick={refreshPackets} disabled={packets.isRefetching} aria-label="Refresh packets">
-              <span className={packets.isRefetching ? 'animate-spin' : ''}><RefreshIcon /></span>
+          <Tooltip content={`Show newest ${batchSize} packets`}>
+            <button className="icon-action" type="button" onClick={() => showPacketEdge('newest')} disabled={packets.isFetching} aria-label={`Show newest ${batchSize} packets`}>
+              <NewestPacketsIcon />
+            </button>
+          </Tooltip>
+          <Tooltip content={`Show oldest ${batchSize} packets`}>
+            <button className="icon-action" type="button" onClick={() => showPacketEdge('oldest')} disabled={packets.isFetching} aria-label={`Show oldest ${batchSize} packets`}>
+              <OldestPacketsIcon />
             </button>
           </Tooltip>
         </div>

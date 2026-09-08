@@ -45,7 +45,10 @@ export class MockUplinkDataSource implements UplinkDataSource {
     let start = 0;
     let end = summaries.length;
 
-    if (request.page.after) {
+    if (request.page.edge === 'oldest') {
+      end = summaries.length;
+      start = Math.max(0, end - request.page.limit);
+    } else if (request.page.after) {
       start = decodeCursor(request.page.after, requestKey).index + 1;
       end = Math.min(start + request.page.limit, summaries.length);
     } else if (request.page.before) {
@@ -106,10 +109,10 @@ function validateRequest(request: UplinkSearchRequest): void {
       `Page size must be an integer between 1 and ${MAX_UPLINK_PAGE_SIZE}.`,
     );
   }
-  if (page.after && page.before) {
+  if ((page.after && page.before) || (page.edge && (page.after || page.before))) {
     throw new UplinkDataSourceError(
       'invalid_request',
-      'A page request cannot contain both after and before cursors.',
+      'A page request must use only one cursor or result edge.',
     );
   }
   if (sorting.length > 3 || new Set(sorting.map(({ field }) => field)).size !== sorting.length) {

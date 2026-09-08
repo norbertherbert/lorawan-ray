@@ -67,6 +67,21 @@ test('uses opaque keyset cursors for forward and backward pages', async () => {
   assert.equal(client.calls[2].variables.cursor_record_key, 'two');
 });
 
+test('loads the oldest edge and returns it in newest-first order', async () => {
+  const oldest = searchRow('oldest', 1_777_799_998_000);
+  const newer = searchRow('newer', 1_777_799_999_000);
+  const extra = searchRow('extra', 1_777_800_000_000);
+  const client = scriptedClient([[[oldest, newer, extra]]]);
+  const source = new SurrealUplinkDataSource(client);
+
+  const page = await source.search({ page: { limit: 2, edge: 'oldest' } });
+
+  assert.deepEqual(page.items.map(({ id }) => id), ['newer', 'oldest']);
+  assert.equal(page.pageInfo.hasPreviousPage, true);
+  assert.equal(page.pageInfo.hasNextPage, false);
+  assert.match(client.calls[0].query, /ORDER BY __sort_0 ASC, __record_key ASC/);
+});
+
 test('loads newly arrived packets above the initial newest cursor without overlapping older rows', async () => {
   const timestamp = 1_777_800_000_000;
   const old = searchRow('old', timestamp);
