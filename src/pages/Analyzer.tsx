@@ -661,12 +661,12 @@ export default function Analyzer({
           </Tooltip>
           <Tooltip content={`Show newest ${batchSize} packets`}>
             <button className="icon-action" type="button" onClick={() => showPacketEdge('newest')} disabled={packets.isFetching} aria-label={`Show newest ${batchSize} packets`}>
-              <NewestPacketsIcon />
+              <OldestPacketsIcon />
             </button>
           </Tooltip>
           <Tooltip content={`Show oldest ${batchSize} packets`}>
             <button className="icon-action" type="button" onClick={() => showPacketEdge('oldest')} disabled={packets.isFetching} aria-label={`Show oldest ${batchSize} packets`}>
-              <OldestPacketsIcon />
+              <NewestPacketsIcon />
             </button>
           </Tooltip>
         </div>
