@@ -3,7 +3,8 @@ import { PACKET_COLUMN_OPTIONS, type PacketColumnId } from './packetColumns.ts';
 import type { UplinkDataSource, UplinkDetails, UplinkFilters } from './types.ts';
 
 const CSV_PAGE_SIZE = 250;
-const DETAIL_REQUEST_CONCURRENCY = 6;
+const EXPORT_INSPECTION_PAGE_SIZE = 500;
+export const CSV_EXPORT_WARNING_THRESHOLD = 10_000;
 const NEWEST_FIRST_SORTING = [{ field: 'observedAt', direction: 'desc' }] as const;
 
 const DETAIL_COLUMNS = [
@@ -22,6 +23,107 @@ const CSV_COLUMNS = [
   ...DETAIL_COLUMNS,
 ];
 
+export interface PacketExportInspection {
+  matchingPackets: number;
+  exceedsWarningThreshold: boolean;
+}
+
+export async function inspectPacketExport({
+  dataSource,
+  filters,
+  signal,
+  warningThreshold = CSV_EXPORT_WARNING_THRESHOLD,
+}: {
+  dataSource: UplinkDataSource;
+  filters?: UplinkFilters;
+  signal?: AbortSignal;
+  warningThreshold?: number;
+}): Promise<PacketExportInspection> {
+  if (!Number.isInteger(warningThreshold) || warningThreshold < 1) {
+    throw new Error('The CSV export warning threshold must be a positive integer.');
+  }
+
+  let after: string | undefined;
+  let matchingPackets = 0;
+
+  while (matchingPackets <= warningThreshold) {
+    throwIfAborted(signal);
+    const remaining = warningThreshold + 1 - matchingPackets;
+    const result = await dataSource.search(
+      {
+        page: {
+          limit: Math.min(EXPORT_INSPECTION_PAGE_SIZE, remaining),
+          ...(after ? { after } : {}),
+        },
+        sorting: [...NEWEST_FIRST_SORTING],
+        filters,
+      },
+      { signal },
+    );
+    matchingPackets += result.items.length;
+
+    if (matchingPackets > warningThreshold || !result.pageInfo.hasNextPage) break;
+    if (!result.pageInfo.endCursor || result.items.length === 0) {
+      throw new Error('The packet export inspection could not advance to the next page.');
+    }
+    after = result.pageInfo.endCursor;
+  }
+
+  return {
+    matchingPackets,
+    exceedsWarningThreshold: matchingPackets > warningThreshold,
+  };
+}
+
+export async function writePacketsToCsv({
+  dataSource,
+  filters,
+  signal,
+  onProgress,
+  write,
+}: {
+  dataSource: UplinkDataSource;
+  filters?: UplinkFilters;
+  signal?: AbortSignal;
+  onProgress?: (exportedRows: number) => void;
+  write: (chunk: string) => void | Promise<void>;
+}): Promise<number> {
+  await write(`${CSV_COLUMNS.map(({ label }) => csvCell(label)).join(',')}\r\n`);
+  let after: string | undefined;
+  let exportedRows = 0;
+
+  do {
+    throwIfAborted(signal);
+    const result = await dataSource.search(
+      {
+        page: { limit: CSV_PAGE_SIZE, ...(after ? { after } : {}) },
+        sorting: [...NEWEST_FIRST_SORTING],
+        filters,
+      },
+      { signal },
+    );
+
+    const details = result.items.length
+      ? await dataSource.getByIds(result.items.map(({ id }) => id), { signal })
+      : [];
+    const lines = details.map((packet) => {
+      exportedRows += 1;
+      onProgress?.(exportedRows);
+      return CSV_COLUMNS.map(({ id }) => csvCell(packetColumnValue(packet, id))).join(',');
+    });
+    if (lines.length) await write(`${lines.join('\r\n')}\r\n`);
+
+    if (!result.pageInfo.hasNextPage) break;
+    if (!result.pageInfo.endCursor || result.items.length === 0) {
+      throw new Error('The packet export could not advance to the next page.');
+    }
+    after = result.pageInfo.endCursor;
+  } while (!signal?.aborted);
+
+  throwIfAborted(signal);
+  return exportedRows;
+}
+
 export async function exportPacketsToCsv({
   dataSource,
   filters,
@@ -33,44 +135,17 @@ export async function exportPacketsToCsv({
   signal?: AbortSignal;
   onProgress?: (exportedRows: number) => void;
 }): Promise<string> {
-  const lines = [CSV_COLUMNS.map(({ label }) => csvCell(label)).join(',')];
-  let after: string | undefined;
-  let exportedRows = 0;
-
-  do {
-    const result = await dataSource.search(
-      {
-        page: { limit: CSV_PAGE_SIZE, ...(after ? { after } : {}) },
-        sorting: [...NEWEST_FIRST_SORTING],
-        filters,
-      },
-      { signal },
-    );
-
-    const details = await mapWithConcurrency(
-      result.items,
-      DETAIL_REQUEST_CONCURRENCY,
-      async (packet) => {
-        const detail = await dataSource.getById(packet.id, { signal });
-        exportedRows += 1;
-        onProgress?.(exportedRows);
-        return detail;
-      },
-    );
-
-    for (const packet of details) {
-      lines.push(CSV_COLUMNS.map(({ id }) => csvCell(packetColumnValue(packet, id))).join(','));
-    }
-
-    if (!result.pageInfo.hasNextPage) break;
-    if (!result.pageInfo.endCursor || result.items.length === 0) {
-      throw new Error('The packet export could not advance to the next page.');
-    }
-    after = result.pageInfo.endCursor;
-  } while (!signal?.aborted);
-
-  if (signal?.aborted) throw new DOMException('The packet export was cancelled.', 'AbortError');
-  return `${lines.join('\r\n')}\r\n`;
+  const chunks: string[] = [];
+  await writePacketsToCsv({
+    dataSource,
+    filters,
+    signal,
+    onProgress,
+    write: (chunk) => {
+      chunks.push(chunk);
+    },
+  });
+  return chunks.join('');
 }
 
 function packetColumnValue(
@@ -100,30 +175,12 @@ function packetColumnValue(
   }
 }
 
-async function mapWithConcurrency<T, R>(
-  values: readonly T[],
-  concurrency: number,
-  transform: (value: T) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(values.length);
-  let nextIndex = 0;
-
-  async function worker() {
-    while (nextIndex < values.length) {
-      const index = nextIndex;
-      nextIndex += 1;
-      results[index] = await transform(values[index]);
-    }
-  }
-
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, values.length) }, () => worker()),
-  );
-  return results;
-}
-
 function csvCell(value: string | number | null): string {
   if (value === null) return '';
   if (typeof value === 'number') return String(value);
   return `"${value.replaceAll('"', '""')}"`;
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new DOMException('The packet export was cancelled.', 'AbortError');
 }

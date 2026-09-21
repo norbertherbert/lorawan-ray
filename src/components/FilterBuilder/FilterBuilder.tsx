@@ -276,7 +276,7 @@ export default function FilterBuilder({
             </div>
             <div className="analyzer-filter-grid">
               {draft.filterType === 'sniffer' ? (
-                <FilterField label="Search" value={draft.text} placeholder="Payload, address, MType…" onChange={(value) => update('text', value)} />
+                <FilterField label="Search (newest 1,000)" value={draft.text} placeholder="Payload, address, MType…" onChange={(value) => update('text', value)} />
               ) : null}
               {draft.filterType === 'per' ? (
                 <>

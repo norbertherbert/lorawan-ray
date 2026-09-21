@@ -3,8 +3,8 @@ main = "src/index.js"
 compatibility_date = "2026-08-18"
 
 [vars]
-SURREAL_NAMESPACE = "lorawan"
-SURREAL_DATABASE = "ray"
+SURREAL_NAMESPACE = "lora"
+SURREAL_DATABASE = "manta"
 SURREAL_ACCESS = "google"
 TOKEN_ISSUER = "tiny-tasks-auth"
 TOKEN_AUDIENCE = "tiny-tasks-surrealdb"

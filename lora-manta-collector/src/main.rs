@@ -50,11 +50,11 @@ struct Args {
     password_file: Option<PathBuf>,
 
     /// SurrealDB namespace containing the collector tables.
-    #[arg(long = "ns", default_value = "lorawan")]
+    #[arg(long = "ns", default_value = "lora")]
     namespace: String,
 
     /// SurrealDB database containing the collector tables.
-    #[arg(long = "db", default_value = "ray")]
+    #[arg(long = "db", default_value = "manta")]
     database: String,
 
     /// SurrealDB record-access method used to authenticate the gateway.
@@ -65,9 +65,13 @@ struct Args {
     #[arg(long)]
     gateway_stats: bool,
 
-    /// Forward only messages matching these comma-separated DevAddr/DevEUI values.
-    #[arg(long, value_name = "DEV_ADDR,DEV_EUI")]
-    white_list: Option<String>,
+    /// Allow data frames whose DevAddr starts with any of these repeatable prefixes.
+    #[arg(long = "dev-addr-prefix", value_name = "HEX_PREFIX")]
+    dev_addr_prefixes: Vec<String>,
+
+    /// Allow Join Requests whose DevEUI starts with any of these repeatable prefixes.
+    #[arg(long = "dev-eui-prefix", value_name = "HEX_PREFIX")]
+    dev_eui_prefixes: Vec<String>,
 
     /// Local UDP address for packet-forwarder traffic.
     #[arg(short = 'l', long, default_value = "127.0.0.1:1700")]
@@ -107,7 +111,7 @@ struct Config {
     access: String,
     username: String,
     password: String,
-    white_list: Option<HashSet<String>>,
+    reception_filter: ReceptionFilter,
     log_level: LogLevel,
 }
 
@@ -118,8 +122,36 @@ struct SurrealWriter {
     namespace: String,
     database: String,
     authentication: Authentication,
-    white_list: Option<HashSet<String>>,
+    reception_filter: ReceptionFilter,
     log_level: LogLevel,
+}
+
+#[derive(Clone, Default)]
+struct ReceptionFilter {
+    dev_addr_prefixes: Option<HashSet<String>>,
+    dev_eui_prefixes: Option<HashSet<String>>,
+}
+
+impl ReceptionFilter {
+    fn is_active(&self) -> bool {
+        self.dev_addr_prefixes.is_some() || self.dev_eui_prefixes.is_some()
+    }
+
+    fn allows(&self, reception: &NormalizedGatewayReception) -> bool {
+        if let Some(dev_addr) = reception.lorawan.dev_addr.as_deref() {
+            return self
+                .dev_addr_prefixes
+                .as_ref()
+                .is_none_or(|prefixes| prefixes.iter().any(|prefix| dev_addr.starts_with(prefix)));
+        }
+        if let Some(dev_eui) = reception.lorawan.dev_eui.as_deref() {
+            return self
+                .dev_eui_prefixes
+                .as_ref()
+                .is_none_or(|prefixes| prefixes.iter().any(|prefix| dev_eui.starts_with(prefix)));
+        }
+        !self.is_active()
+    }
 }
 
 struct Authentication {
@@ -701,23 +733,16 @@ fn reception_statement(index: usize, reception: &NormalizedGatewayReception) -> 
 
 fn reception_is_allowed(
     reception: &NormalizedGatewayReception,
-    white_list: Option<&HashSet<String>>,
+    reception_filter: Option<&ReceptionFilter>,
 ) -> bool {
-    white_list.is_none_or(|identifiers| {
-        reception
-            .lorawan
-            .dev_addr
-            .iter()
-            .chain(reception.lorawan.dev_eui.iter())
-            .any(|identifier| identifiers.contains(identifier))
-    })
+    reception_filter.is_none_or(|filter| filter.allows(reception))
 }
 
 fn storage_query(
     gateway_id: &str,
     payload: &Value,
     store_gateway_stats: bool,
-    white_list: Option<&HashSet<String>>,
+    reception_filter: Option<&ReceptionFilter>,
 ) -> Result<Option<String>> {
     let root = payload
         .as_object()
@@ -733,7 +758,7 @@ fn storage_query(
                 .cloned()
                 .context("each PUSH_DATA rxpk entry must be an object")?;
             let reception = normalize_reception(gateway_id, raw_rxpk, index)?;
-            if reception_is_allowed(&reception, white_list) {
+            if reception_is_allowed(&reception, reception_filter) {
                 statements.push(reception_statement(index, &reception)?);
             }
         }
@@ -787,15 +812,20 @@ fn ensure_query_succeeded(body: &str) -> Result<()> {
     Ok(())
 }
 
-fn parse_white_list(value: Option<&str>) -> Result<Option<HashSet<String>>> {
-    let Some(value) = value else {
+fn parse_hex_prefixes(
+    values: &[String],
+    option_name: &str,
+    maximum_length: usize,
+) -> Result<Option<HashSet<String>>> {
+    if values.is_empty() {
         return Ok(None);
-    };
-    let mut identifiers = HashSet::new();
-    for item in value.split(',') {
-        let item = item.trim();
+    }
+
+    let mut prefixes = HashSet::new();
+    for value in values {
+        let item = value.trim();
         if item.is_empty() {
-            anyhow::bail!("--white-list contains an empty entry");
+            anyhow::bail!("{option_name} contains an empty prefix");
         }
         let item = item
             .strip_prefix("0x")
@@ -806,18 +836,19 @@ fn parse_white_list(value: Option<&str>) -> Result<Option<HashSet<String>>> {
             .filter(|character| !matches!(character, ':' | '-'))
             .collect::<String>()
             .to_ascii_uppercase();
-        if !matches!(normalized.len(), 8 | 16)
+        if normalized.is_empty()
+            || normalized.len() > maximum_length
             || !normalized
                 .chars()
                 .all(|character| character.is_ascii_hexdigit())
         {
             anyhow::bail!(
-                "invalid --white-list entry '{item}'; expected an 8-digit DevAddr or 16-digit DevEUI"
+                "invalid {option_name} value '{item}'; expected 1 to {maximum_length} hexadecimal digits"
             );
         }
-        identifiers.insert(normalized);
+        prefixes.insert(normalized);
     }
-    Ok(Some(identifiers))
+    Ok(Some(prefixes))
 }
 
 impl Config {
@@ -836,7 +867,10 @@ impl Config {
             _ => unreachable!("clap requires exactly one password source"),
         };
 
-        let white_list = parse_white_list(args.white_list.as_deref())?;
+        let reception_filter = ReceptionFilter {
+            dev_addr_prefixes: parse_hex_prefixes(&args.dev_addr_prefixes, "--dev-addr-prefix", 8)?,
+            dev_eui_prefixes: parse_hex_prefixes(&args.dev_eui_prefixes, "--dev-eui-prefix", 16)?,
+        };
 
         Ok(Self {
             bind: args.listen_addr,
@@ -847,7 +881,7 @@ impl Config {
             access: args.access,
             username: args.username,
             password,
-            white_list,
+            reception_filter,
             log_level: args.log_level,
         })
     }
@@ -867,7 +901,7 @@ impl SurrealWriter {
                 password: config.password.clone(),
                 token: Mutex::new(None),
             },
-            white_list: config.white_list.clone(),
+            reception_filter: config.reception_filter.clone(),
             log_level: config.log_level,
         }
     }
@@ -973,7 +1007,7 @@ impl SurrealWriter {
             gateway_id,
             payload,
             self.store_gateway_stats,
-            self.white_list.as_ref(),
+            Some(&self.reception_filter),
         )?
         else {
             return Ok(());
@@ -1153,8 +1187,8 @@ mod tests {
         .unwrap();
 
         assert_eq!(args.listen_addr, "127.0.0.1:1700".parse().unwrap());
-        assert_eq!(args.namespace, "lorawan");
-        assert_eq!(args.database, "ray");
+        assert_eq!(args.namespace, "lora");
+        assert_eq!(args.database, "manta");
         assert_eq!(args.access, "gateway_writer");
         assert!(!args.gateway_stats);
         assert_eq!(args.log_level, LogLevel::Info);
@@ -1175,8 +1209,12 @@ mod tests {
             "--db",
             "test_database",
             "--gateway-stats",
-            "--white-list",
-            "26011abc,11:22:33:44:55:66:77:88",
+            "--dev-addr-prefix",
+            "26011abc",
+            "--dev-addr-prefix",
+            "04:03:F1",
+            "--dev-eui-prefix",
+            "11:22:33:44",
             "-l",
             "0.0.0.0:1701",
             "--log-level",
@@ -1189,10 +1227,8 @@ mod tests {
         assert_eq!(args.namespace, "test_namespace");
         assert_eq!(args.database, "test_database");
         assert_eq!(args.listen_addr, "0.0.0.0:1701".parse().unwrap());
-        assert_eq!(
-            args.white_list.as_deref(),
-            Some("26011abc,11:22:33:44:55:66:77:88")
-        );
+        assert_eq!(args.dev_addr_prefixes, ["26011abc", "04:03:F1"]);
+        assert_eq!(args.dev_eui_prefixes, ["11:22:33:44"]);
     }
 
     #[test]
@@ -1220,20 +1256,35 @@ mod tests {
     }
 
     #[test]
-    fn normalizes_white_list_entries() {
-        let white_list = parse_white_list(Some("26011abc, 0x0403F1A0, 11:22:33:44:55:66:77:88"))
-            .unwrap()
-            .unwrap();
+    fn normalizes_and_deduplicates_hex_prefixes() {
+        let prefixes = parse_hex_prefixes(
+            &[
+                "26011abc".to_owned(),
+                "0x04:03:F1".to_owned(),
+                "26-01-1A-BC".to_owned(),
+            ],
+            "--dev-addr-prefix",
+            8,
+        )
+        .unwrap()
+        .unwrap();
 
-        assert!(white_list.contains("26011ABC"));
-        assert!(white_list.contains("0403F1A0"));
-        assert!(white_list.contains("1122334455667788"));
+        assert_eq!(prefixes.len(), 2);
+        assert!(prefixes.contains("26011ABC"));
+        assert!(prefixes.contains("0403F1"));
     }
 
     #[test]
-    fn rejects_invalid_white_list_entries() {
-        let error = parse_white_list(Some("26011ABC,not-a-device")).unwrap_err();
-        assert!(error.to_string().contains("invalid --white-list entry"));
+    fn rejects_invalid_hex_prefixes() {
+        let error =
+            parse_hex_prefixes(&["26011ABC0".to_owned()], "--dev-addr-prefix", 8).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("invalid --dev-addr-prefix value"));
+
+        let error =
+            parse_hex_prefixes(&["not-hex".to_owned()], "--dev-eui-prefix", 16).unwrap_err();
+        assert!(error.to_string().contains("invalid --dev-eui-prefix value"));
     }
 
     #[test]
@@ -1272,8 +1323,8 @@ mod tests {
     #[test]
     fn builds_record_access_signin_request() {
         let request = serde_json::to_value(SigninRequest {
-            ns: "lorawan",
-            db: "ray",
+            ns: "lora",
+            db: "manta",
             access: "gateway_writer",
             user: "1032547698BADCFE",
             pass: "secret",
@@ -1282,8 +1333,8 @@ mod tests {
         assert_eq!(
             request,
             serde_json::json!({
-                "NS": "lorawan",
-                "DB": "ray",
+                "NS": "lora",
+                "DB": "manta",
                 "AC": "gateway_writer",
                 "user": "1032547698BADCFE",
                 "pass": "secret"
@@ -1392,7 +1443,7 @@ mod tests {
     }
 
     #[test]
-    fn forwards_only_receptions_matching_the_white_list() {
+    fn filters_dev_addr_and_dev_eui_prefixes_independently() {
         let payload = serde_json::json!({
             "rxpk": [
                 {"data": "QLwaASaAOTAKqrsRIjNE"},
@@ -1400,28 +1451,85 @@ mod tests {
             ]
         });
 
-        let dev_addr = HashSet::from(["26011ABC".to_owned()]);
-        let query = storage_query("1032547698BADCFE", &payload, false, Some(&dev_addr))
+        let dev_addr_only = ReceptionFilter {
+            dev_addr_prefixes: Some(HashSet::from(["26011A".to_owned()])),
+            dev_eui_prefixes: None,
+        };
+        let query = storage_query("1032547698BADCFE", &payload, false, Some(&dev_addr_only))
+            .unwrap()
+            .unwrap();
+        assert_eq!(query.matches("CREATE gateway_reception:").count(), 2);
+        assert!(query.contains("\"dev_addr\":\"26011ABC\""));
+        assert!(query.contains("\"dev_eui\":\"1122334455667788\""));
+
+        let dev_addr_no_match = ReceptionFilter {
+            dev_addr_prefixes: Some(HashSet::from(["0102".to_owned()])),
+            dev_eui_prefixes: None,
+        };
+        let query = storage_query(
+            "1032547698BADCFE",
+            &payload,
+            false,
+            Some(&dev_addr_no_match),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(query.matches("CREATE gateway_reception:").count(), 1);
+        assert!(query.contains("\"dev_eui\":\"1122334455667788\""));
+        assert!(!query.contains("\"dev_addr\":\"26011ABC\""));
+
+        let dev_eui_only = ReceptionFilter {
+            dev_addr_prefixes: None,
+            dev_eui_prefixes: Some(HashSet::from(["112233".to_owned()])),
+        };
+        let query = storage_query("1032547698BADCFE", &payload, false, Some(&dev_eui_only))
+            .unwrap()
+            .unwrap();
+        assert_eq!(query.matches("CREATE gateway_reception:").count(), 2);
+
+        let dev_eui_no_match = ReceptionFilter {
+            dev_addr_prefixes: None,
+            dev_eui_prefixes: Some(HashSet::from(["FFFF".to_owned()])),
+        };
+        let query = storage_query("1032547698BADCFE", &payload, false, Some(&dev_eui_no_match))
             .unwrap()
             .unwrap();
         assert_eq!(query.matches("CREATE gateway_reception:").count(), 1);
         assert!(query.contains("\"dev_addr\":\"26011ABC\""));
         assert!(!query.contains("\"dev_eui\":\"1122334455667788\""));
 
-        let dev_eui = HashSet::from(["1122334455667788".to_owned()]);
-        let query = storage_query("1032547698BADCFE", &payload, false, Some(&dev_eui))
+        let both = ReceptionFilter {
+            dev_addr_prefixes: Some(HashSet::from(["2601".to_owned()])),
+            dev_eui_prefixes: Some(HashSet::from(["FFFF".to_owned()])),
+        };
+        let query = storage_query("1032547698BADCFE", &payload, false, Some(&both))
             .unwrap()
             .unwrap();
         assert_eq!(query.matches("CREATE gateway_reception:").count(), 1);
-        assert!(query.contains("\"dev_eui\":\"1122334455667788\""));
-        assert!(!query.contains("\"dev_addr\":\"26011ABC\""));
+        assert!(query.contains("\"dev_addr\":\"26011ABC\""));
+        assert!(!query.contains("\"dev_eui\":\"1122334455667788\""));
+    }
 
-        let no_match = HashSet::from(["01020304".to_owned()]);
-        assert!(
-            storage_query("1032547698BADCFE", &payload, false, Some(&no_match))
-                .unwrap()
-                .is_none()
-        );
+    #[test]
+    fn active_prefix_filter_rejects_receptions_without_a_device_identifier() {
+        let filter = ReceptionFilter {
+            dev_addr_prefixes: Some(HashSet::from(["2601".to_owned()])),
+            dev_eui_prefixes: None,
+        };
+        let query = storage_query(
+            "1032547698BADCFE",
+            &serde_json::json!({
+                "rxpk": [{"data": "VEVTVA=="}],
+                "stat": {"rxnb": 1, "rxok": 1}
+            }),
+            true,
+            Some(&filter),
+        )
+        .unwrap()
+        .unwrap();
+
+        assert!(!query.contains("CREATE gateway_reception:"));
+        assert!(query.contains("CREATE gateway_stat:"));
     }
 
     #[test]

@@ -105,8 +105,8 @@ through Cargo, place the collector arguments after `--`:
 ```bash
 cargo run --release -- \
   --destination https://example.surreal.cloud \
-  --ns lorawan \
-  --db ray \
+  --ns lora \
+  --db manta \
   --access gateway_writer \
   --username gw_647FDAFFFE005E17 \
   --password '<password>' \
@@ -119,8 +119,8 @@ cargo run --release -- \
 is the HTTPS instance endpoint without `/sql` at the end. The defaults are:
 
 - `--listen-addr 127.0.0.1:1700`
-- `--ns lorawan`
-- `--db ray`
+- `--ns lora`
+- `--db manta`
 - `--access gateway_writer`
 - `--log-level info`
 
@@ -154,20 +154,28 @@ addition to normal `rxpk` receptions, add:
 
 Reception objects in `rxpk` continue to be stored normally.
 
-To forward only uplinks from selected devices, provide a comma-separated list
-of DevAddr and DevEUI values:
+To store only data frames whose DevAddr starts with an allowed prefix, repeat
+`--dev-addr-prefix` as needed:
 
 ```bash
---white-list 26011ABC,0403F1A0,1122334455667788
+--dev-addr-prefix 26011A --dev-addr-prefix 0403F1
 ```
 
-Matching is case-insensitive. An optional `0x` prefix and `:` or `-` separators
-are accepted. Data frames are matched by DevAddr and Join Requests by DevEUI.
-Messages without a matching decoded identifier are acknowledged but are not
-stored in SurrealDB. Gateway status storage remains controlled independently by
-`--gateway-stats`.
+Join Requests can be filtered separately by DevEUI prefix:
 
-The complete SurrealDB table, index, permission, and record-access initialization is available in [`init_db.surql`](init_db.surql). Review its namespace and database names before running it in SurrealDB Studio. It also contains a commented template for provisioning one credential per physical gateway.
+```bash
+--dev-eui-prefix 11223344 --dev-eui-prefix AABBCC
+```
+
+Prefixes within each category are combined with OR. If only one category is
+configured, the other category remains unrestricted. Matching is
+case-insensitive; an optional `0x` prefix and `:` or `-` separators are accepted.
+A DevAddr prefix may contain 1-8 hexadecimal digits, and a DevEUI prefix 1-16.
+When either filter is active, receptions without a decoded DevAddr or DevEUI are
+acknowledged but not stored. Gateway status storage remains controlled
+independently by `--gateway-stats`.
+
+The complete SurrealDB table, index, permission, and record-access initialization is available in [`../surreal/schema.surql`](../surreal/schema.surql). Configure its private placeholders before running it in SurrealDB Studio. It also contains a commented template for provisioning one credential per physical gateway.
 
 An RF reception keeps the protocol-defined packet-forwarder object intact and
 also stores normalized fields for indexed queries:
@@ -283,7 +291,7 @@ FROM gateway_reception:
 
 ## Restricted gateway authentication
 
-Run [`init_db.surql`](init_db.surql) from an administrator session, then provision a unique `gateway_credential` record for each physical gateway using the template at the end of that file. The credential record ID and `--username` are both the gateway's 16-character hexadecimal ID; the access method normalizes the supplied username to uppercase. The credential record stores only the password hash and enabled flag. The collector signs in through the shared `gateway_writer` record-access method, and table permissions restrict it to creating records for its own gateway ID in `gateway_reception` and `gateway_stat`. A database event maintains shared `lorawan_uplink` records without granting gateways direct write access to that table.
+Run [`../surreal/schema.surql`](../surreal/schema.surql) from an administrator session after configuring its private placeholders, then provision a unique `gateway_credential` record for each physical gateway using the template at the end of that file. The credential record ID and `--username` are both the gateway's 16-character hexadecimal ID; the access method normalizes the supplied username to uppercase. Each credential also stores a human-readable name, the password hash, and the enabled flag. The name is descriptive metadata only and is never used for authentication. The collector signs in through the shared `gateway_writer` record-access method, and table permissions restrict it to creating records for its own gateway ID in `gateway_reception` and `gateway_stat`. A database event maintains shared `lorawan_uplink` records without granting gateways direct write access to that table.
 
 Configure the process using arguments:
 

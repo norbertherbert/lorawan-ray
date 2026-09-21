@@ -97,6 +97,16 @@ export class MockUplinkDataSource implements UplinkDataSource {
     }
     return record;
   }
+
+  async getByIds(ids: readonly string[], options: DataSourceOptions = {}): Promise<UplinkDetails[]> {
+    throwIfAborted(options.signal);
+    const recordsById = new Map(this.#records.map((record) => [record.id, record]));
+    return ids.map((id) => {
+      const record = recordsById.get(id);
+      if (!record) throw new UplinkDataSourceError('not_found', `Uplink ${id} was not found.`);
+      return record;
+    });
+  }
 }
 
 export const mockUplinkDataSource = new MockUplinkDataSource();

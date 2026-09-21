@@ -1,8 +1,7 @@
-import type { Surreal } from 'surrealdb';
+import { RecordId, type Surreal } from 'surrealdb';
 import type {
   DatabaseDecodedLoRaWAN,
-  DatabaseGatewayReception,
-  DatabaseLogicalUplink,
+  DatabasePhyPayload,
   DatabaseRadioMetadata,
   DatabaseSignal,
 } from './databaseTypes.ts';
@@ -31,6 +30,32 @@ import type {
 } from '../lorawan/types.ts';
 
 const DEFAULT_SORTING: readonly UplinkSort[] = [{ field: 'observedAt', direction: 'desc' }];
+const PER_PACKET_LIMIT = 1_000;
+const TEXT_SEARCH_CANDIDATE_LIMIT = 1_000;
+const UPLINK_COMMON_PROJECTION = `
+          schema_version,
+          observed_at,
+          dev_eui,
+          dev_addr,
+          fcnt16,
+          fport,
+          mtype,
+          modulation,
+          data_rate,
+          coding_rate,
+          hopping_channel_width,
+          spreading_factor,
+          frequency_hz,
+          best_rssi_dbm,
+          best_snr_db,
+          best_gateway_id,
+          reception_count,
+          phy.{ payload_hex }`;
+const UPLINK_SUMMARY_PROJECTION = `id,
+          ${UPLINK_COMMON_PROJECTION},
+          lorawan.{ mtype }`;
+const UPLINK_DETAIL_PROJECTION = `${UPLINK_COMMON_PROJECTION},
+          lorawan`;
 const MESSAGE_TYPES: readonly LoRaWANMessageType[] = [
   'JoinRequest',
   'JoinAccept',
@@ -44,17 +69,50 @@ const MESSAGE_TYPES: readonly LoRaWANMessageType[] = [
 
 export type SurrealQueryClient = Pick<Surreal, 'query'>;
 
-interface SearchRow extends DatabaseLogicalUplink {
+interface UplinkSummaryRow {
+  schema_version: 1;
+  observed_at: string;
+  dev_eui?: string;
+  dev_addr?: string;
+  fcnt16?: number;
+  fport?: number;
+  mtype?: string;
+  modulation?: string;
+  data_rate?: string | number;
+  coding_rate?: string;
+  hopping_channel_width?: number;
+  spreading_factor?: number;
+  frequency_hz?: number;
+  best_rssi_dbm?: number;
+  best_snr_db?: number;
+  best_gateway_id?: string;
+  reception_count?: number;
+  phy?: Pick<DatabasePhyPayload, 'payload_hex'>;
+  lorawan?: Pick<DatabaseDecodedLoRaWAN, 'mtype'>;
+}
+
+interface SearchRow extends UplinkSummaryRow {
   __record_key: string;
   [cursorField: `__sort_${number}`]: string | number;
 }
 
-interface DetailsRow extends DatabaseLogicalUplink {
+interface DetailsRow extends UplinkSummaryRow {
+  __record_key: string;
+  lorawan: DatabaseDecodedLoRaWAN;
+}
+
+interface ReceptionRow {
+  schema_version: 1;
+  gateway_id: string;
+  observed_at: string;
+  ingested_at: string;
+  timestamp_source: 'gateway' | 'ingested';
+  radio: DatabaseRadioMetadata;
   __record_key: string;
 }
 
-interface ReceptionRow extends DatabaseGatewayReception {
-  __record_key: string;
+interface BulkReceptionRow extends ReceptionRow {
+  __uplink_key: string;
 }
 
 interface CursorPayload {
@@ -66,7 +124,7 @@ interface CursorPayload {
 
 interface SortDefinition {
   expression: string;
-  valueType: 'number' | 'string';
+  valueType: 'datetime' | 'number' | 'string';
   nullable: boolean;
 }
 
@@ -79,7 +137,7 @@ interface BuiltSearchQuery {
 }
 
 const SORT_DEFINITIONS: Record<UplinkSortField, SortDefinition> = {
-  observedAt: { expression: 'time::millis(observed_at)', valueType: 'number', nullable: false },
+  observedAt: { expression: 'observed_at', valueType: 'datetime', nullable: false },
   devEui: { expression: 'dev_eui', valueType: 'string', nullable: true },
   devAddr: { expression: 'dev_addr', valueType: 'string', nullable: true },
   fCnt: { expression: 'fcnt16', valueType: 'number', nullable: true },
@@ -153,12 +211,16 @@ export class SurrealUplinkDataSource implements UplinkDataSource {
     throwIfAborted(options.signal);
     validateRequest({ page: { limit: 1 }, filters });
     const predicates = ['fcnt16 IS NOT NONE'];
-    const variables: Record<string, unknown> = {};
+    const variables: Record<string, unknown> = { per_limit: PER_PACKET_LIMIT };
     appendFilters(predicates, variables, filters);
     const [values] = await abortable(
       this.#db
         .query(
-          `SELECT VALUE fcnt16 FROM lorawan_uplink WHERE ${predicates.join(' AND ')};`,
+          `SELECT VALUE fcnt16
+           FROM lorawan_uplink
+           WHERE ${predicates.join(' AND ')}
+           ORDER BY observed_at DESC
+           LIMIT $per_limit;`,
           variables,
         )
         .json()
@@ -183,28 +245,78 @@ export class SurrealUplinkDataSource implements UplinkDataSource {
       throw new UplinkDataSourceError('invalid_request', 'The uplink ID is invalid.');
     }
 
+    const details = await this.getByIds([id], options);
+    return details[0];
+  }
+
+  async getByIds(
+    ids: readonly string[],
+    options: DataSourceOptions = {},
+  ): Promise<UplinkDetails[]> {
+    throwIfAborted(options.signal);
+    if (
+      ids.length < 1 ||
+      ids.length > MAX_UPLINK_PAGE_SIZE ||
+      new Set(ids).size !== ids.length ||
+      ids.some((id) => !id || id.length > 512)
+    ) {
+      throw new UplinkDataSourceError(
+        'invalid_request',
+        `Request between 1 and ${MAX_UPLINK_PAGE_SIZE} unique uplink IDs.`,
+      );
+    }
+
+    const uplinkIds = ids.map((id) => new RecordId('lorawan_uplink', id));
+
     const query = `
-      SELECT *, record::id(id) AS __record_key
-      FROM ONLY type::record("lorawan_uplink", $record_key);
-      SELECT *, <string>id AS __record_key
-      FROM gateway_reception
-      WHERE uplink = type::record("lorawan_uplink", $record_key)
-      ORDER BY observed_at ASC, gateway_id ASC;
+      SELECT ${UPLINK_DETAIL_PROJECTION},
+        record::id(id) AS __record_key
+      FROM $uplink_ids;
+      SELECT
+        schema_version,
+        gateway_id,
+        observed_at,
+        ingested_at,
+        timestamp_source,
+        radio,
+        <string>id AS __record_key,
+        <string> record::id(uplink) AS __uplink_key
+      FROM gateway_reception WITH INDEX reception_uplink
+      WHERE uplink IN $uplink_ids;
     `;
     const results = await abortable(
-      this.#db.query(query, { record_key: id }).json().collect<[DetailsRow | null, ReceptionRow[]]>(),
+      this.#db
+        .query(query, { uplink_ids: uplinkIds })
+        .json()
+        .collect<[DetailsRow[], BulkReceptionRow[]]>(),
       options.signal,
     );
-    const uplink = results[0];
+    throwIfAborted(options.signal);
+    const uplinks = results[0];
     const receptions = results[1];
-    if (!uplink) throw new UplinkDataSourceError('not_found', `Uplink ${id} was not found.`);
+    if (!Array.isArray(uplinks)) invalidResponse('The uplink detail query did not return a row array.');
     if (!Array.isArray(receptions)) invalidResponse('The reception query did not return a row array.');
 
-    return {
-      ...toUplinkSummary(uplink),
-      frame: toDecodedFrame(uplink.lorawan, uplink.phy?.payload_hex),
-      receptions: receptions.map(toGatewayReception),
-    };
+    const uplinksByKey = new Map(uplinks.map((uplink) => [uplink.__record_key, uplink]));
+    const receptionsByUplink = new Map<string, GatewayReception[]>();
+    for (const reception of receptions) {
+      if (typeof reception.__uplink_key !== 'string') {
+        invalidResponse('A gateway reception is missing its uplink key.');
+      }
+      const grouped = receptionsByUplink.get(reception.__uplink_key) ?? [];
+      grouped.push(toGatewayReception(reception));
+      receptionsByUplink.set(reception.__uplink_key, grouped);
+    }
+
+    return ids.map((id) => {
+      const uplink = uplinksByKey.get(id);
+      if (!uplink) throw new UplinkDataSourceError('not_found', `Uplink ${id} was not found.`);
+      return {
+        ...toUplinkSummary(uplink),
+        frame: toDecodedFrame(uplink.lorawan, uplink.phy?.payload_hex),
+        receptions: (receptionsByUplink.get(id) ?? []).sort(compareGatewayReceptions),
+      };
+    });
   }
 }
 
@@ -216,10 +328,62 @@ export function buildSearchQuery(request: UplinkSearchRequest): BuiltSearchQuery
   const cursorValue = request.page.after ?? request.page.before;
   const cursor = cursorValue ? decodeCursor(cursorValue, requestKey, sorting.length) : null;
   const backwards = Boolean(request.page.before || request.page.edge === 'oldest');
-  const predicates: string[] = [];
+  const structuredPredicates: string[] = [];
+  const textPredicates: string[] = [];
   const variables: Record<string, unknown> = { limit: request.page.limit + 1 };
 
-  appendFilters(predicates, variables, request.filters);
+  appendFilters(structuredPredicates, variables, request.filters, textPredicates);
+  const hasTextSearch = textPredicates.length > 0;
+  const predicates = hasTextSearch ? textPredicates : structuredPredicates;
+  let source = 'lorawan_uplink';
+  if (hasTextSearch) {
+    variables.text_candidate_limit = TEXT_SEARCH_CANDIDATE_LIMIT;
+    const candidateWhere = structuredPredicates.length
+      ? `WHERE ${structuredPredicates.join('\n          AND ')}`
+      : '';
+    source = `(
+        SELECT
+          ${UPLINK_SUMMARY_PROJECTION},
+          gateway_ids
+        FROM lorawan_uplink
+        ${candidateWhere}
+        ORDER BY observed_at DESC, id DESC
+        LIMIT $text_candidate_limit
+      )`;
+  }
+
+  if (sorting.length === 1 && sorting[0].field === 'observedAt') {
+    if (cursor) {
+      const comparison = comparisonOperator(sorting[0].direction, backwards);
+      predicates.push(`(
+        observed_at ${comparison} <datetime>$cursor_0
+        OR (
+          observed_at = <datetime>$cursor_0
+          AND id ${comparison} type::record("lorawan_uplink", $cursor_record_key)
+        )
+      )`);
+      variables.cursor_0 = cursorTimestamp(cursor.values[0]);
+      variables.cursor_record_key = cursor.recordKey;
+    }
+
+    const direction = queryDirection(sorting[0].direction, backwards);
+    const where = predicates.length ? `WHERE ${predicates.join('\n        AND ')}` : '';
+    return {
+      text: `
+        SELECT ${UPLINK_SUMMARY_PROJECTION},
+          record::id(id) AS __record_key,
+          observed_at AS __sort_0
+        FROM ${source}
+        ${where}
+        ORDER BY observed_at ${direction}, id ${direction}
+        LIMIT $limit;
+      `,
+      variables,
+      sorting,
+      requestKey,
+      backwards,
+    };
+  }
 
   const sortExpressions = sorting.map((sort, index) => {
     const definition = SORT_DEFINITIONS[sort.field];
@@ -231,17 +395,22 @@ export function buildSearchQuery(request: UplinkSearchRequest): BuiltSearchQuery
   if (cursor) {
     const cursorPredicates: string[] = [];
     for (let index = 0; index < sorting.length; index += 1) {
+      const cursorOperand = cursorQueryOperand(sorting[index].field, index);
       const equals = sortExpressions
         .slice(0, index)
-        .map((expression, previous) => `${expression} = $cursor_${previous}`);
+        .map((expression, previous) => (
+          `${expression} = ${cursorQueryOperand(sorting[previous].field, previous)}`
+        ));
       const comparison = comparisonOperator(sorting[index].direction, backwards);
       cursorPredicates.push(
-        [...equals, `${sortExpressions[index]} ${comparison} $cursor_${index}`].join(' AND '),
+        [...equals, `${sortExpressions[index]} ${comparison} ${cursorOperand}`].join(' AND '),
       );
-      variables[`cursor_${index}`] = cursor.values[index];
+      variables[`cursor_${index}`] = cursorQueryValue(sorting[index].field, cursor.values[index]);
     }
     const idEquals = sortExpressions.map(
-      (expression, index) => `${expression} = $cursor_${index}`,
+      (expression, index) => (
+        `${expression} = ${cursorQueryOperand(sorting[index].field, index)}`
+      ),
     );
     const idDirection = sorting[sorting.length - 1].direction;
     idEquals.push(`record::id(id) ${comparisonOperator(idDirection, backwards)} $cursor_record_key`);
@@ -261,10 +430,10 @@ export function buildSearchQuery(request: UplinkSearchRequest): BuiltSearchQuery
 
   return {
     text: `
-      SELECT *,
+      SELECT ${UPLINK_SUMMARY_PROJECTION},
         record::id(id) AS __record_key,
         ${selectSortFields}
-      FROM lorawan_uplink
+      FROM ${source}
       ${where}
       ORDER BY ${orderBy}
       LIMIT $limit;
@@ -280,6 +449,7 @@ function appendFilters(
   predicates: string[],
   variables: Record<string, unknown>,
   filters?: UplinkFilters,
+  textPredicates: string[] = predicates,
 ): void {
   const packet = filters?.packet;
   if (packet?.from) {
@@ -317,7 +487,7 @@ function appendFilters(
   }
   const text = packet?.text?.trim();
   if (text) {
-    predicates.push(`(
+    textPredicates.push(`(
       string::contains(string::uppercase(phy.payload_hex), $text)
       OR string::contains(string::uppercase(dev_eui ?? ""), $text)
       OR string::contains(string::uppercase(dev_addr ?? ""), $text)
@@ -331,10 +501,17 @@ function appendFilters(
 
   const reception = filters?.reception;
   if (!reception || !hasReceptionFilter(reception)) return;
-  const receptionPredicates = ['uplink IS NOT NONE'];
+
+  if (reception.gatewayIds?.length) {
+    predicates.push('gateway_ids CONTAINSANY $gateway_ids');
+    variables.gateway_ids = reception.gatewayIds.map(normalizeHex);
+  }
+
+  if (!hasRadioReceptionFilter(reception)) return;
+
+  const receptionPredicates = ['uplink = $parent.id'];
   if (reception.gatewayIds?.length) {
     receptionPredicates.push('gateway_id IN $gateway_ids');
-    variables.gateway_ids = reception.gatewayIds.map(normalizeHex);
   }
   if (reception.spreadingFactors?.length) {
     receptionPredicates.push('radio.spreading_factor IN $spreading_factors');
@@ -343,7 +520,12 @@ function appendFilters(
   appendRange(receptionPredicates, variables, 'radio.frequency_hz', 'frequency_hz', reception.frequencyMHz, 1_000_000);
   appendRange(receptionPredicates, variables, 'radio.best_rssi_dbm', 'rssi_dbm', reception.rssiDbm);
   appendRange(receptionPredicates, variables, 'radio.best_snr_db', 'snr_db', reception.snrDb);
-  predicates.push(`id IN (SELECT VALUE uplink FROM gateway_reception WHERE ${receptionPredicates.join(' AND ')})`);
+  predicates.push(`array::len((
+    SELECT VALUE id
+    FROM gateway_reception WITH INDEX reception_uplink
+    WHERE ${receptionPredicates.join(' AND ')}
+    LIMIT 1
+  )) > 0`);
 }
 
 function appendRange(
@@ -368,6 +550,15 @@ function hasReceptionFilter(filters: NonNullable<UplinkFilters['reception']>): b
   return Boolean(
     filters.gatewayIds?.length ||
       filters.spreadingFactors?.length ||
+      filters.frequencyMHz ||
+      filters.rssiDbm ||
+      filters.snrDb,
+  );
+}
+
+function hasRadioReceptionFilter(filters: NonNullable<UplinkFilters['reception']>): boolean {
+  return Boolean(
+    filters.spreadingFactors?.length ||
       filters.frequencyMHz ||
       filters.rssiDbm ||
       filters.snrDb,
@@ -447,17 +638,46 @@ function queryDirection(direction: UplinkSort['direction'], backwards: boolean):
 }
 
 function nullSentinel(type: SortDefinition['valueType'], direction: UplinkSort['direction']): string | number {
+  if (type === 'datetime') {
+    throw new UplinkDataSourceError('invalid_request', 'Nullable datetime sorting is not supported.');
+  }
   if (type === 'number') return direction === 'asc' ? Number.MAX_SAFE_INTEGER : Number.MIN_SAFE_INTEGER;
   return direction === 'asc' ? String.fromCodePoint(0x10ffff) : '';
 }
 
 function encodeCursor(row: SearchRow, sorting: readonly UplinkSort[], requestKey: string): string {
-  const values = sorting.map((_, index) => row[`__sort_${index}`]);
+  const values = sorting.map((sort, index) => {
+    const value = row[`__sort_${index}`];
+    return sort.field === 'observedAt' ? cursorTimestamp(value) : value;
+  });
   if (values.some((value) => typeof value !== 'string' && typeof value !== 'number')) {
     invalidResponse('An uplink row is missing its cursor values.');
   }
   if (typeof row.__record_key !== 'string') invalidResponse('An uplink row is missing its record key.');
   return encodeBase64Url(JSON.stringify({ version: 1, requestKey, values, recordKey: row.__record_key }));
+}
+
+function cursorQueryOperand(field: UplinkSortField, index: number): string {
+  const variable = `$cursor_${index}`;
+  return field === 'observedAt' ? `<datetime>${variable}` : variable;
+}
+
+function cursorQueryValue(field: UplinkSortField, value: string | number): string | number {
+  return field === 'observedAt' ? cursorTimestamp(value) : value;
+}
+
+function cursorTimestamp(value: unknown): string {
+  if (value instanceof Date) {
+    if (Number.isFinite(value.getTime())) return value.toISOString();
+  } else if (typeof value === 'string' && Number.isFinite(Date.parse(value))) {
+    // Keep SurrealDB's sub-millisecond precision. JavaScript Date would truncate it,
+    // causing a boundary record to satisfy its own next/previous-page predicate.
+    return value;
+  } else if (typeof value === 'number') {
+    const date = new Date(value);
+    if (Number.isFinite(date.getTime())) return date.toISOString();
+  }
+  throw new UplinkDataSourceError('invalid_cursor', 'The page cursor contains an invalid timestamp.');
 }
 
 function decodeCursor(value: string, requestKey: string, valueCount: number): CursorPayload {
@@ -505,7 +725,7 @@ function normalizeHex(value: string): string {
   return value.replace(/[:\s-]/g, '').toUpperCase();
 }
 
-function toUplinkSummary(row: DatabaseLogicalUplink & { __record_key: string }): UplinkSummary {
+function toUplinkSummary(row: UplinkSummaryRow & { __record_key: string }): UplinkSummary {
   if (!row || row.schema_version !== 1 || typeof row.__record_key !== 'string') {
     invalidResponse('SurrealDB returned an unsupported uplink record.');
   }
@@ -556,6 +776,13 @@ function toGatewayReception(row: ReceptionRow): GatewayReception {
     bestSnrDb: optionalNumber(radio.best_snr_db),
     signals: (radio.signals ?? []).map(toRadioSignal),
   };
+}
+
+function compareGatewayReceptions(left: GatewayReception, right: GatewayReception): number {
+  const timestamp = (left.receivedAt ?? left.ingestedAt).localeCompare(
+    right.receivedAt ?? right.ingestedAt,
+  );
+  return timestamp || left.gatewayId.localeCompare(right.gatewayId);
 }
 
 function toRadioSignal(signal: DatabaseSignal) {

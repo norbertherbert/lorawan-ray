@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { exportPacketsToCsv } from './packetCsv.ts';
+import {
+  exportPacketsToCsv,
+  inspectPacketExport,
+} from './packetCsv.ts';
 
 test('exports every filtered cursor page with all table and packet-detail columns', async () => {
   const requests = [];
+  const detailRequests = [];
   const packets = [
     packet('first', '2026-09-04T12:00:00.000Z', 'plain'),
     packet('second', '2026-09-04T11:00:00.000Z', 'value, with "quotes"'),
@@ -22,8 +26,9 @@ test('exports every filtered cursor page with all table and packet-detail column
         },
       };
     },
-    async getById(id) {
-      return packets.find((candidate) => candidate.id === id);
+    async getByIds(ids) {
+      detailRequests.push(ids);
+      return ids.map((id) => packets.find((candidate) => candidate.id === id));
     },
   };
 
@@ -46,6 +51,35 @@ test('exports every filtered cursor page with all table and packet-detail column
   assert.equal(requests[0].page.limit, 250);
   assert.deepEqual(requests[0].filters, { packet: { devAddrs: ['first', 'second'] } });
   assert.equal(requests[1].page.after, 'first');
+  assert.deepEqual(detailRequests, [['first'], ['second']]);
+});
+
+test('inspects only up to one packet beyond the large-export warning threshold', async () => {
+  const requests = [];
+  const dataSource = {
+    async search(request) {
+      requests.push(request);
+      return {
+        items: Array.from({ length: request.page.limit }, (_, index) => ({ id: String(index) })),
+        pageInfo: {
+          startCursor: 'start',
+          endCursor: 'end',
+          hasPreviousPage: false,
+          hasNextPage: true,
+        },
+      };
+    },
+  };
+
+  const result = await inspectPacketExport({
+    dataSource,
+    filters: { packet: { devAddrs: ['26011ABC'] } },
+    warningThreshold: 2,
+  });
+
+  assert.deepEqual(result, { matchingPackets: 3, exceedsWarningThreshold: true });
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].page.limit, 3);
 });
 
 function packet(devAddr, observedAt, dataRate) {

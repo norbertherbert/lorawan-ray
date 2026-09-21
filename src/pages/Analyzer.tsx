@@ -4,10 +4,30 @@ import {
   type ColumnVisibilityState,
   type RowSelectionState,
 } from '@tanstack/react-table';
-import { Alert, Badge, Card, Dropdown, DropdownDivider, DropdownItem, Label, Select, Spinner, Tooltip } from 'flowbite-react';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Dropdown,
+  DropdownDivider,
+  DropdownItem,
+  Label,
+  Modal,
+  ModalBody,
+  ModalFooter,
+  ModalHeader,
+  Select,
+  Spinner,
+  Tooltip,
+} from 'flowbite-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { UplinkDataSource, UplinkFilters, UplinkSort } from '../api/types.ts';
-import { exportPacketsToCsv } from '../api/packetCsv.ts';
+import {
+  CSV_EXPORT_WARNING_THRESHOLD,
+  inspectPacketExport,
+  writePacketsToCsv,
+} from '../api/packetCsv.ts';
 import { PACKET_COLUMN_OPTIONS, type PacketColumnId } from '../api/packetColumns.ts';
 import {
   createSavedFilterDefinition,
@@ -36,6 +56,11 @@ import { isSessionAuthenticationError } from '../lib.js';
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
 const NEWEST_FIRST_SORTING: UplinkSort[] = [{ field: 'observedAt', direction: 'desc' }];
 const COLUMN_PREFERENCES_VERSION = 1;
+
+interface CsvExportConfirmation {
+  filters?: UplinkFilters;
+  reason: 'large' | 'unfiltered';
+}
 
 function columnPreferencesKey(userId: string) {
   return `lora-manta.sniffer-columns.v${COLUMN_PREFERENCES_VERSION}:${userId}`;
@@ -101,6 +126,8 @@ export default function Analyzer({
   const [exportingCsv, setExportingCsv] = useState(false);
   const [exportedPacketCount, setExportedPacketCount] = useState(0);
   const [csvExportError, setCsvExportError] = useState('');
+  const [csvExportConfirmation, setCsvExportConfirmation] =
+    useState<CsvExportConfirmation | null>(null);
   const csvExportController = useRef<AbortController | null>(null);
   const initialSavedFilterLoaded = useRef(false);
   const reportedSearchError = useRef<unknown>(null);
@@ -134,22 +161,29 @@ export default function Analyzer({
       return cursor ? { before: cursor } : undefined;
     },
   });
-  const packetRows = useMemo(
-    () => packets.data?.pages.flatMap(({ items }) => items) ?? [],
-    [packets.data],
-  );
+  const packetRows = useMemo(() => {
+    const rows = packets.data?.pages.flatMap(({ items }) => items) ?? [];
+    const seen = new Set<string>();
+    return rows.filter(({ id }) => {
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  }, [packets.data]);
   const appliedPerFilters = filterDraft.filterType !== 'sniffer' ? filters : undefined;
   const packetErrorRates = useQuery({
     queryKey: ['packet-error-rates', sourceKey, filterDraft.filterType, appliedPerFilters],
     queryFn: async ({ signal }) => {
       const devAddrs = appliedPerFilters?.packet?.devAddrs ?? [];
-      return Promise.all(devAddrs.map(async (devAddr) => {
+      const results = [];
+      for (const devAddr of devAddrs) {
         const result = await dataSource.calculatePacketErrorRate(
           filtersForDeviceAddress(appliedPerFilters!, devAddr),
           { signal },
         );
-        return { devAddr, percentage: result?.percentage ?? null };
-      }));
+        results.push({ devAddr, percentage: result?.percentage ?? null });
+      }
+      return results;
     },
     enabled: Boolean(appliedPerFilters),
   });
@@ -428,42 +462,88 @@ export default function Analyzer({
     else void packets.refetch();
   }, [packets.isFetching, packets.hasPreviousPage, packets.fetchPreviousPage, packets.refetch]);
 
-  function toggleCsvExport() {
+  async function requestCsvExport() {
     if (csvExportController.current) {
       csvExportController.current.abort();
       return;
     }
     if (requireActiveSession?.() === false) return;
 
+    const exportFilters = cloneExportFilters(filters);
+    setCsvExportError('');
+    if (!exportFilters) {
+      setCsvExportConfirmation({ filters: undefined, reason: 'unfiltered' });
+      return;
+    }
+
+    const controller = new AbortController();
+    csvExportController.current = controller;
+    setExportingCsv(true);
+    setExportedPacketCount(0);
+    let shouldStart = false;
+    try {
+      const inspection = await inspectPacketExport({
+        dataSource,
+        filters: exportFilters,
+        signal: controller.signal,
+      });
+      if (inspection.exceedsWarningThreshold) {
+        setCsvExportConfirmation({ filters: exportFilters, reason: 'large' });
+      } else {
+        shouldStart = true;
+      }
+    } catch (cause) {
+      if (!controller.signal.aborted) {
+        setCsvExportError(errorText(cause, 'Could not inspect the CSV export.'));
+        reportSessionError(cause, 'Could not inspect the CSV export.');
+      }
+    } finally {
+      if (csvExportController.current === controller) csvExportController.current = null;
+      setExportingCsv(false);
+    }
+
+    if (shouldStart && !controller.signal.aborted) {
+      void startCsvExport(exportFilters, false);
+    }
+  }
+
+  async function startCsvExport(exportFilters: UplinkFilters | undefined, preferStreaming: boolean) {
+    if (csvExportController.current || requireActiveSession?.() === false) return;
     const controller = new AbortController();
     csvExportController.current = controller;
     setExportingCsv(true);
     setExportedPacketCount(0);
     setCsvExportError('');
+    let sink: CsvDownloadSink | null = null;
 
-    void exportPacketsToCsv({
-      dataSource,
-      filters,
-      signal: controller.signal,
-      onProgress: setExportedPacketCount,
-    })
-      .then((csv) => {
-        if (!controller.signal.aborted) downloadCsv(csv, csvExportFilename());
-      })
-      .catch((cause) => {
-        if (controller.signal.aborted) return;
+    try {
+      sink = await createCsvDownloadSink(csvExportFilename(), preferStreaming);
+      await sink.write('\uFEFF');
+      await writePacketsToCsv({
+        dataSource,
+        filters: exportFilters,
+        signal: controller.signal,
+        onProgress: setExportedPacketCount,
+        write: (chunk) => sink!.write(chunk),
+      });
+      if (controller.signal.aborted) throw new DOMException('The export was cancelled.', 'AbortError');
+      await sink.close();
+      sink = null;
+    } catch (cause) {
+      await sink?.abort().catch(() => undefined);
+      if (!controller.signal.aborted && !isAbortError(cause)) {
         setCsvExportError(errorText(cause, 'Could not export packets.'));
         reportSessionError(cause, 'Could not export packets.');
-      })
-      .finally(() => {
-        if (csvExportController.current === controller) csvExportController.current = null;
-        setExportingCsv(false);
-      });
+      }
+    } finally {
+      if (csvExportController.current === controller) csvExportController.current = null;
+      setExportingCsv(false);
+    }
   }
 
   const csvExportStatus = exportedPacketCount > 0
     ? `Exporting CSV… ${exportedPacketCount.toLocaleString()} packets processed — click to cancel`
-    : 'Exporting CSV… click to cancel';
+    : 'Preparing CSV export… click to cancel';
 
   return (
     <Card className="analyzer-card" id="analyzer-card">
@@ -573,7 +653,7 @@ export default function Analyzer({
             <button
               className="icon-action"
               type="button"
-              onClick={toggleCsvExport}
+              onClick={() => void requestCsvExport()}
               aria-label={exportingCsv ? 'Cancel CSV export' : 'Export filtered packets as CSV'}
             >
               {exportingCsv ? <Spinner size="sm" aria-hidden="true" /> : <DownloadIcon />}
@@ -648,6 +728,56 @@ export default function Analyzer({
         onClose={() => setSaveAsOpen(false)}
         onSave={(details) => void createSavedFilter(details)}
       />
+      <Modal
+        dismissible
+        show={csvExportConfirmation !== null}
+        size="lg"
+        onClose={() => setCsvExportConfirmation(null)}
+      >
+        <ModalHeader>Confirm complete CSV export</ModalHeader>
+        <ModalBody>
+          <div className="space-y-3 text-sm text-gray-700 dark:text-gray-300">
+            <p>
+              {csvExportConfirmation?.reason === 'unfiltered'
+                ? 'No packet filter is applied. This export will include every stored packet.'
+                : `More than ${CSV_EXPORT_WARNING_THRESHOLD.toLocaleString()} packets match the current filter.`}
+            </p>
+            <p><strong>Scope:</strong> {describeExportFilters(csvExportConfirmation?.filters)}</p>
+            <p>
+              The export includes decoded frames and all gateway receptions. It will not be
+              truncated and may take several minutes or create a large file.
+            </p>
+            {csvExportConfirmation?.filters?.packet?.text?.trim() ? (
+              <Alert color="warning">
+                Free-text search is limited to the newest 1,000 structured-filter candidates, so
+                the export uses that same scope.
+              </Alert>
+            ) : null}
+            {!supportsStreamingCsvDownload() ? (
+              <Alert color="warning">
+                This browser cannot write the download incrementally. It will buffer the CSV in
+                browser memory before downloading it.
+              </Alert>
+            ) : null}
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <Button
+            color="blue"
+            size="sm"
+            onClick={() => {
+              const exportFilters = csvExportConfirmation?.filters;
+              setCsvExportConfirmation(null);
+              void startCsvExport(exportFilters, true);
+            }}
+          >
+            Export all matching packets
+          </Button>
+          <Button color="light" size="sm" onClick={() => setCsvExportConfirmation(null)}>
+            Adjust filters
+          </Button>
+        </ModalFooter>
+      </Modal>
     </Card>
   );
 }
@@ -666,15 +796,99 @@ function errorText(cause: unknown, fallback: string): string {
   return cause instanceof Error && cause.message ? cause.message : fallback;
 }
 
-function downloadCsv(csv: string, filename: string) {
-  const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+interface CsvDownloadSink {
+  write(chunk: string): Promise<void>;
+  close(): Promise<void>;
+  abort(): Promise<void>;
+}
+
+interface CsvFileWritable {
+  write(chunk: string): Promise<void>;
+  close(): Promise<void>;
+  abort(): Promise<void>;
+}
+
+interface CsvFileHandle {
+  createWritable(): Promise<CsvFileWritable>;
+}
+
+type CsvSaveFilePicker = (options: {
+  suggestedName: string;
+  types: Array<{ description: string; accept: Record<string, string[]> }>;
+}) => Promise<CsvFileHandle>;
+
+function supportsStreamingCsvDownload(): boolean {
+  return typeof (window as Window & { showSaveFilePicker?: CsvSaveFilePicker }).showSaveFilePicker === 'function';
+}
+
+async function createCsvDownloadSink(
+  filename: string,
+  preferStreaming: boolean,
+): Promise<CsvDownloadSink> {
+  const picker = (window as Window & { showSaveFilePicker?: CsvSaveFilePicker }).showSaveFilePicker;
+  if (preferStreaming && picker) {
+    const handle = await picker.call(window, {
+      suggestedName: filename,
+      types: [{ description: 'CSV file', accept: { 'text/csv': ['.csv'] } }],
+    });
+    const writable = await handle.createWritable();
+    return {
+      write: (chunk) => writable.write(chunk),
+      close: () => writable.close(),
+      abort: () => writable.abort(),
+    };
+  }
+
+  const chunks: BlobPart[] = [];
+  return {
+    async write(chunk) {
+      chunks.push(chunk);
+    },
+    async close() {
+      const url = URL.createObjectURL(new Blob(chunks, { type: 'text/csv;charset=utf-8' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      chunks.length = 0;
+    },
+    async abort() {
+      chunks.length = 0;
+    },
+  };
+}
+
+function cloneExportFilters(filters: UplinkFilters | undefined): UplinkFilters | undefined {
+  return filters && Object.keys(filters).length ? structuredClone(filters) : undefined;
+}
+
+function describeExportFilters(filters: UplinkFilters | undefined): string {
+  if (!filters) return 'All stored packets (no filters).';
+  const packet = filters.packet;
+  const reception = filters.reception;
+  const parts: string[] = [];
+  if (packet?.from || packet?.to) parts.push('time range');
+  if (packet?.devEuis?.length) parts.push(`${packet.devEuis.length} DevEUI value(s)`);
+  if (packet?.devAddrs?.length) parts.push(`${packet.devAddrs.length} DevAddr value(s)`);
+  if (packet?.fCnt) parts.push('frame-counter range');
+  if (packet?.fPorts?.length) parts.push(`${packet.fPorts.length} FPort value(s)`);
+  if (packet?.mTypes?.length) parts.push(`${packet.mTypes.length} message type(s)`);
+  if (packet?.modulations?.length) parts.push(`${packet.modulations.length} modulation value(s)`);
+  if (packet?.dataRates?.length) parts.push(`${packet.dataRates.length} data-rate value(s)`);
+  if (packet?.text?.trim()) parts.push(`free text “${packet.text.trim()}”`);
+  if (reception?.gatewayIds?.length) parts.push(`${reception.gatewayIds.length} gateway(s)`);
+  if (reception?.spreadingFactors?.length) parts.push('spreading factor');
+  if (reception?.frequencyMHz) parts.push('frequency range');
+  if (reception?.rssiDbm) parts.push('RSSI range');
+  if (reception?.snrDb) parts.push('SNR range');
+  return parts.length ? parts.join(', ') : 'All stored packets (empty filter).';
+}
+
+function isAbortError(cause: unknown): boolean {
+  return cause instanceof DOMException && cause.name === 'AbortError';
 }
 
 function csvExportFilename(now = new Date()) {

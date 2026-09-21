@@ -10,9 +10,8 @@ solution:
   UDP Packet Forwarder traffic, normalizes LoRaWAN uplinks and gateway radio
   metadata, and stores them in SurrealDB Cloud.
 - [`worker`](worker/) contains the authentication-only Cloudflare Worker.
-- [`surreal`](surreal/) contains the Web UI authentication and authorization
-  schema. The collector owns the packet schema in
-  [`lora-manta-collector/init_db.surql`](lora-manta-collector/init_db.surql).
+- [`surreal`](surreal/) contains the complete SurrealDB schema plus operational
+  maintenance scripts.
 
 The Web UI supports administrator approval and single-use invitations. The
 Cloudflare Worker verifies Google ID tokens and exchanges them for 15-minute
@@ -60,29 +59,21 @@ This exact value is shared only between the Worker and SurrealDB. Never put it i
 
 ## 2. Configure SurrealDB
 
-Open [surreal/schema.surql](surreal/schema.surql) and make a temporary, untracked copy. In that copy:
+Open [surreal/schema.surql](surreal/schema.surql) and make a temporary, untracked copy. This is the
+complete fresh-database bootstrap. In that copy:
 
-1. Run the
-   [collector schema](lora-manta-collector/init_db.surql) in
-   `NS lorawan DB ray` first so `gateway_reception` and `lorawan_uplink` exist.
-2. Replace `__SURREAL_JWT_SECRET__` with the secret from step 1.
-3. Replace `__TOKEN_ISSUER__` with `tiny-tasks-auth`.
-4. Replace `__TOKEN_AUDIENCE__` with `tiny-tasks-surrealdb`.
-5. Replace `__ADMIN_EMAIL__` with the administrator's Google email.
-6. Run the script as a database owner in Surrealist. That verified Google email is automatically
+1. Replace `__SURREAL_JWT_SECRET__` with the secret from step 1.
+2. Replace `__TOKEN_ISSUER__` with `tiny-tasks-auth`.
+3. Replace `__TOKEN_AUDIENCE__` with `tiny-tasks-surrealdb`.
+4. Replace `__ADMIN_EMAIL__` with the administrator's Google email.
+5. Run the script as a database owner in Surrealist. That verified Google email is automatically
    approved and designated as administrator on first sign-in.
 
 The schema creates deterministic `user:google_<google-sub>` records at first
-login. The collector's
-[`init_db.surql`](lora-manta-collector/init_db.surql) owns normalized
-packet-table permissions: approved Google users may select logical uplinks and
+login. Its collector section owns normalized packet-table permissions: approved
+Google users may select logical uplinks and
 receptions, while gateway-specific creation is preserved and browser users
 cannot create, update, or delete packet records.
-
-When upgrading an existing database that already has the authentication
-schema, run [`surreal/saved_filters.surql`](surreal/saved_filters.surql) as a
-database owner. It adds saved Sniffer and PER dataset filters without touching
-the Google access definition or any private authentication values.
 
 ## Registration and invitations
 
@@ -125,7 +116,7 @@ OAuth origins contain only scheme, host, and port.
 
 Edit [worker/wrangler.toml](worker/wrangler.toml):
 
-- Keep namespace/database set to `lorawan/ray`.
+- Keep namespace/database set to `lora/manta`.
 - Replace the GitHub origin in `ALLOWED_ORIGINS`.
 - Keep issuer/audience synchronized with the SurrealQL script.
 

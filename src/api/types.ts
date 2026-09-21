@@ -168,6 +168,7 @@ export interface PacketErrorRateResult {
 export interface UplinkDataSource {
   search(request: UplinkSearchRequest, options?: DataSourceOptions): Promise<UplinkPage>;
   getById(id: string, options?: DataSourceOptions): Promise<UplinkDetails>;
+  getByIds(ids: readonly string[], options?: DataSourceOptions): Promise<UplinkDetails[]>;
   calculatePacketErrorRate(
     filters: UplinkFilters,
     options?: DataSourceOptions,

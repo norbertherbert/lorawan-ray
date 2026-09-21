@@ -6,15 +6,15 @@ import { createSessionCookie } from '../src/session.js';
 
 const origin = 'https://example.com';
 const env = {
-  GOOGLE_CLIENT_ID: 'test-client', SURREAL_NAMESPACE: 'lorawan',
-  SURREAL_DATABASE: 'ray', SURREAL_ACCESS: 'google',
+  GOOGLE_CLIENT_ID: 'test-client', SURREAL_NAMESPACE: 'lora',
+  SURREAL_DATABASE: 'manta', SURREAL_ACCESS: 'google',
   SURREAL_JWT_SECRET: 'test-secret-'.repeat(8), TOKEN_ISSUER: 'test-issuer',
   TOKEN_AUDIENCE: 'test-database', ALLOWED_ORIGINS: `${origin},https://other.example`,
 };
 
 async function token(issuedAt = Math.floor(Date.now() / 1000), lifetime = 3600) {
   return new SignJWT({
-    ns: 'lorawan', db: 'ray', ac: 'google', sub: 'test-user',
+    ns: 'lora', db: 'manta', ac: 'google', sub: 'test-user',
     id: 'user:google_test-user', name: 'Test User', email: 'test@example.com',
   }).setProtectedHeader({ alg: 'HS512' }).setIssuedAt(issuedAt)
     .setExpirationTime(issuedAt + lifetime).setIssuer(env.TOKEN_ISSUER)
@@ -50,7 +50,7 @@ test('encrypted HttpOnly cookie restores the same token with only its remaining 
 
 test('missing, malformed and foreign-origin session cookies cannot restore login', async () => {
   const cookie = (await createSessionCookie(await token(), origin, env)).split(';')[0];
-  for (const [value, from] of [['', origin], ['__Host-ray-session=broken', origin], [cookie, 'https://other.example']]) {
+  for (const [value, from] of [['', origin], ['__Host-manta-session=broken', origin], [cookie, 'https://other.example']]) {
     const response = await worker.fetch(request('/auth/session', value, from), env);
     assert.equal(response.status, 401);
     assert.match(response.headers.get('Set-Cookie'), /Max-Age=0/);
@@ -67,7 +67,7 @@ test('expired cookies cannot restore login', async (t) => {
 test('logout clears the cookie with matching path and security attributes', async () => {
   const response = await worker.fetch(request('/auth/logout'), env);
   assert.equal(response.status, 200);
-  assert.match(response.headers.get('Set-Cookie'), /__Host-ray-session=; Path=\/; Max-Age=0; HttpOnly; Secure; SameSite=None; Partitioned/);
+  assert.match(response.headers.get('Set-Cookie'), /__Host-manta-session=; Path=\/; Max-Age=0; HttpOnly; Secure; SameSite=None; Partitioned/);
 });
 
 test('session endpoints reject foreign origins and simple cross-site form requests', async () => {
