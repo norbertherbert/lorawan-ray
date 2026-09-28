@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { decodeDevicePayload } from './devicePayload.ts';
 
-test('decodes the application payload and treats the battery as little-endian', () => {
-  assert.deepEqual(decodeDevicePayload('01341207A6'), {
+test('decodes the application payload and treats the battery as big-endian', () => {
+  assert.deepEqual(decodeDevicePayload('01123407A6'), {
     version: 1,
     batteryLevel: 0x1234,
     status: 7,
@@ -12,7 +12,7 @@ test('decodes the application payload and treats the battery as little-endian', 
 });
 
 test('ignores trailing padding bytes', () => {
-  assert.deepEqual(decodeDevicePayload('02CDAB03F60000FF'), {
+  assert.deepEqual(decodeDevicePayload('02ABCD03F60000FF'), {
     version: 2,
     batteryLevel: 0xabcd,
     status: 3,

@@ -40,7 +40,7 @@ test('exports every filtered cursor page with all table and packet-detail column
   });
 
   const lines = csv.trimEnd().split('\r\n');
-  assert.match(lines[0], /^"Timestamp","DevEUI","DevAddr","FCnt"/);
+  assert.match(lines[0], /^"UTC Timestamp","Local time","DevEUI","DevAddr","FCnt"/);
   assert.match(lines[0], /"Decoded frame \(JSON\)","Gateway receptions \(JSON\)"$/);
   assert.match(lines[1], /"first"/);
   assert.match(lines[2], /"value, with ""quotes"""/);

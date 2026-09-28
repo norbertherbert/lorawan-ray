@@ -13,8 +13,8 @@ export function decodeDevicePayload(hex: string): DecodedDevicePayload | null {
   }
 
   const version = byteAt(hex, 0);
-  const batteryLow = byteAt(hex, 1);
-  const batteryHigh = byteAt(hex, 2);
+  const batteryHigh = byteAt(hex, 1);
+  const batteryLow = byteAt(hex, 2);
   const status = byteAt(hex, 3);
   const rawRssi = byteAt(hex, 4);
 

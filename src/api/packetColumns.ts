@@ -1,5 +1,6 @@
 export const PACKET_COLUMN_OPTIONS = [
-  { id: 'observedAt', label: 'Timestamp', csvLabel: 'Timestamp' },
+  { id: 'observedAt', label: 'UTC Timestamp', csvLabel: 'UTC Timestamp' },
+  { id: 'localTime', label: 'Local time', csvLabel: 'Local time' },
   { id: 'devEui', label: 'DevEUI', csvLabel: 'DevEUI' },
   { id: 'devAddr', label: 'DevAddr', csvLabel: 'DevAddr' },
   { id: 'fCnt', label: 'FCnt', csvLabel: 'FCnt' },

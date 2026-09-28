@@ -2,14 +2,20 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   formatDate,
+  formatLocalTime,
   isSessionAuthenticationError,
   jwtExpirationTime,
   jwtLifetimeMs,
 } from './lib.js';
 
-test('formats browser-local dates with fixed-width components', () => {
+test('formats UTC dates with fixed-width components', () => {
+  assert.equal(formatDate('2026-08-06T04:05:09Z'), '2026-08-06 04:05:09');
+});
+
+test('formats browser-local time with fixed-width components', () => {
   const date = new Date(2026, 7, 6, 4, 5, 9);
-  assert.equal(formatDate(date), '2026-08-06 04:05:09');
+  assert.equal(formatLocalTime(date), '04:05:09');
+  assert.equal(formatLocalTime('not-a-date'), 'unknown');
 });
 
 test('reads the session lifetime independently of the browser clock', () => {

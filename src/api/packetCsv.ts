@@ -1,4 +1,4 @@
-import { formatDate } from '../lib.js';
+import { formatDate, formatLocalTime } from '../lib.js';
 import { PACKET_COLUMN_OPTIONS, type PacketColumnId } from './packetColumns.ts';
 import type { UplinkDataSource, UplinkDetails, UplinkFilters } from './types.ts';
 
@@ -154,6 +154,7 @@ function packetColumnValue(
 ): string | number | null {
   switch (columnId) {
     case 'observedAt': return formatDate(packet.observedAt);
+    case 'localTime': return formatLocalTime(packet.observedAt);
     case 'devEui': return packet.devEui;
     case 'devAddr': return packet.devAddr;
     case 'fCnt': return packet.fCnt;

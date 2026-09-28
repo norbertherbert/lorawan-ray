@@ -291,14 +291,14 @@ export default function FilterBuilder({
                 </>
               ) : null}
               <DateTimeFilterField
-                label="From"
+                label="From (UTC)"
                 date={draft.fromDate}
                 time={draft.fromTime}
                 onDateChange={(value) => update('fromDate', value)}
                 onTimeChange={(value) => update('fromTime', value)}
               />
               <DateTimeFilterField
-                label="To"
+                label="To (UTC)"
                 date={draft.toDate}
                 time={draft.toTime}
                 onDateChange={(value) => update('toDate', value)}
@@ -468,8 +468,8 @@ export function normalizeFilterDraft(input: FilterDraft): {
   const draft = Object.fromEntries(
     Object.entries(input).map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value]),
   ) as unknown as FilterDraft;
-  const from = parseLocalDateAndTime(draft.fromDate, draft.fromTime, 'From', false);
-  const to = parseLocalDateAndTime(draft.toDate, draft.toTime, 'To', true);
+  const from = parseUtcDateAndTime(draft.fromDate, draft.fromTime, 'From', false);
+  const to = parseUtcDateAndTime(draft.toDate, draft.toTime, 'To', true);
   if (from && to && from > to) throw new Error('From must not be after To.');
 
   const fCntFrom = parseOptionalInteger(draft.fCntFrom, 'Start FCnt', 0, 4_294_967_295);
@@ -642,7 +642,7 @@ function aradPerResultLabel(devAddr: string): string {
   return labels[suffix] ?? suffix;
 }
 
-function parseLocalDateAndTime(
+function parseUtcDateAndTime(
   date: string,
   time: string,
   label: string,
@@ -653,7 +653,7 @@ function parseLocalDateAndTime(
   if (time && !/^\d{2}:\d{2}(?::\d{2})?$/.test(time)) {
     throw new Error(`${label} time must use HH:MM or HH:MM:SS.`);
   }
-  return parseLocalTimestamp(`${date}${time ? ` ${time}` : ''}`, endOfDay);
+  return parseUtcTimestamp(`${date}${time ? ` ${time}` : ''}`, endOfDay);
 }
 
 function parseTimeFilterValue(value: string): TimeValue | null {
@@ -672,7 +672,7 @@ function formatTimeFilterValue(value: TimeValue | null): string {
     .join(':');
 }
 
-function parseLocalTimestamp(value: string, endOfDay: boolean): Date | undefined {
+function parseUtcTimestamp(value: string, endOfDay: boolean): Date | undefined {
   if (!value) return undefined;
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/);
   if (!match) throw new Error(`Invalid timestamp: ${value}`);
@@ -684,7 +684,7 @@ function parseLocalTimestamp(value: string, endOfDay: boolean): Date | undefined
   const expectedHour = hasTime ? Number(hour) : endOfDay ? 23 : 0;
   const expectedMinute = hasTime ? Number(minute) : endOfDay ? 59 : 0;
   const expectedSecond = hasTime ? Number(second ?? 0) : endOfDay ? 59 : 0;
-  const date = new Date(
+  const date = new Date(Date.UTC(
     expectedYear,
     expectedMonth,
     expectedDay,
@@ -692,14 +692,14 @@ function parseLocalTimestamp(value: string, endOfDay: boolean): Date | undefined
     expectedMinute,
     expectedSecond,
     !hasTime && endOfDay ? 999 : 0,
-  );
+  ));
   if (
-    date.getFullYear() !== expectedYear ||
-    date.getMonth() !== expectedMonth ||
-    date.getDate() !== expectedDay ||
-    date.getHours() !== expectedHour ||
-    date.getMinutes() !== expectedMinute ||
-    date.getSeconds() !== expectedSecond
+    date.getUTCFullYear() !== expectedYear ||
+    date.getUTCMonth() !== expectedMonth ||
+    date.getUTCDate() !== expectedDay ||
+    date.getUTCHours() !== expectedHour ||
+    date.getUTCMinutes() !== expectedMinute ||
+    date.getUTCSeconds() !== expectedSecond
   ) throw new Error(`Invalid timestamp: ${value}`);
   return date;
 }
@@ -733,10 +733,10 @@ function splitTimestampForDraft(value?: string): { date: string; time: string } 
   if (!value) return { date: '', time: '' };
   const timestamp = new Date(value);
   if (!Number.isFinite(timestamp.getTime())) throw new Error('A saved filter contains an invalid timestamp.');
-  const date = [timestamp.getFullYear(), timestamp.getMonth() + 1, timestamp.getDate()]
+  const date = [timestamp.getUTCFullYear(), timestamp.getUTCMonth() + 1, timestamp.getUTCDate()]
     .map((part, index) => index === 0 ? String(part).padStart(4, '0') : String(part).padStart(2, '0'))
     .join('-');
-  const time = [timestamp.getHours(), timestamp.getMinutes(), timestamp.getSeconds()]
+  const time = [timestamp.getUTCHours(), timestamp.getUTCMinutes(), timestamp.getUTCSeconds()]
     .map((part) => String(part).padStart(2, '0'))
     .join(':');
   return { date, time };

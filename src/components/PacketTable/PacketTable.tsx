@@ -17,7 +17,7 @@ import {
   ArrowUpFromBracketIcon,
   FunnelIcon,
 } from '../Icons.jsx';
-import { formatDate } from '../../lib.js';
+import { formatDate, formatLocalTime } from '../../lib.js';
 
 const features = tableFeatures({ rowSelectionFeature, columnVisibilityFeature });
 const columnHelper = createColumnHelper<typeof features, UplinkSummary>();
@@ -33,7 +33,7 @@ function createColumns(
 ) {
   return columnHelper.columns([
   columnHelper.accessor('observedAt', {
-    header: 'Timestamp',
+    header: 'UTC Timestamp',
     cell: ({ getValue }) => (
       <TimestampCell
         value={getValue()}
@@ -42,6 +42,11 @@ function createColumns(
         onFilterEnd={onFilterEndTime}
       />
     ),
+  }),
+  columnHelper.accessor((row) => row.observedAt, {
+    id: 'localTime',
+    header: 'Local time',
+    cell: ({ getValue }) => formatLocalTime(getValue()),
   }),
   columnHelper.accessor('devEui', { header: 'DevEUI', cell: nullableCell }),
   columnHelper.accessor('devAddr', {
