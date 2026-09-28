@@ -1,5 +1,6 @@
 import { Alert, Card, Spinner } from 'flowbite-react';
 import type { UplinkDetails } from '../../api/types.ts';
+import { decodeDevicePayload } from '../../lorawan/devicePayload.ts';
 import { formatDate } from '../../lib.js';
 
 interface PacketDetailsProps {
@@ -76,7 +77,7 @@ export default function PacketDetails({
                   <TreeValue label="FOpts" value={packet.frame.macPayload.fhdr.fOptsHex || '—'} mono />
                 </TreeGroup>
                 <TreeValue label="FPort" value={packet.frame.macPayload.fPort ?? '—'} />
-                <TreeValue label="FRMPayload" value={packet.frame.macPayload.frmPayloadHex ?? '—'} mono />
+                <FrmPayloadTree hex={packet.frame.macPayload.frmPayloadHex} />
                 <TreeValue label="MIC" value={packet.frame.micHex} mono />
               </TreeGroup>
             ) : null}
@@ -148,6 +149,21 @@ function TreeGroup({ label, children }: { label: string; children: React.ReactNo
 
 function TreeValue({ label, value, mono = false }: { label: string; value: string | number; mono?: boolean }) {
   return <div className="tree-value"><span>{label}</span><code className={mono ? '' : 'plain'}>{String(value)}</code></div>;
+}
+
+function FrmPayloadTree({ hex }: { hex: string | null }) {
+  const decoded = hex === null ? null : decodeDevicePayload(hex);
+  if (!decoded) return <TreeValue label="FRMPayload" value={hex ?? '—'} mono />;
+
+  return (
+    <TreeGroup label="FRMPayload">
+      <TreeValue label="Raw" value={hex ?? '—'} mono />
+      <TreeValue label="Version" value={decoded.version} />
+      <TreeValue label="Battery" value={decoded.batteryLevel} />
+      <TreeValue label="Status" value={decoded.status} />
+      <TreeValue label="RSSI" value={decoded.rssi} />
+    </TreeGroup>
+  );
 }
 
 function groupHex(value: string): string {

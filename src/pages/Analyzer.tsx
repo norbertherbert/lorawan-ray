@@ -155,11 +155,13 @@ export default function Analyzer({
       lastPage.pageInfo.hasNextPage && lastPage.pageInfo.endCursor
         ? { after: lastPage.pageInfo.endCursor } : undefined
     ),
-    // New packets can arrive even when the initial page had no previous page.
-    getPreviousPageParam: (_firstPage, pages): { after?: string; before?: string } | undefined => {
-      const cursor = pages.find((page) => page.items.length)?.pageInfo.startCursor;
-      return cursor ? { before: cursor } : undefined;
-    },
+    // At the newest edge, loadNewerPackets uses refetch to discover arrivals.
+    // Only paginate backward when the data source confirms that a page exists.
+    getPreviousPageParam: (firstPage): { after?: string; before?: string } | undefined => (
+      firstPage.pageInfo.hasPreviousPage && firstPage.pageInfo.startCursor
+        ? { before: firstPage.pageInfo.startCursor }
+        : undefined
+    ),
   });
   const packetRows = useMemo(() => {
     const rows = packets.data?.pages.flatMap(({ items }) => items) ?? [];
@@ -681,7 +683,9 @@ export default function Analyzer({
           rowSelection={rowSelection}
           loading={packets.isLoading}
           loadingMore={packets.isFetchingNextPage}
-          loadingNewer={packets.isFetchingPreviousPage}
+          loadingNewer={packets.isFetchingPreviousPage || (
+            packets.isRefetching && !packets.isFetchingNextPage
+          )}
           hasMore={Boolean(packets.hasNextPage)}
           scrollResetVersion={tableResetVersion}
           showFilterActions={filterExpanded}
