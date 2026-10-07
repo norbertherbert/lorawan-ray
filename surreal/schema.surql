@@ -343,12 +343,22 @@ DEFINE INDEX uplink_best_gateway_time ON lorawan_uplink FIELDS best_gateway_id, 
 -- Approved Google record users can read packets. A gateway may create only its
 -- own reception/status records; events perform logical-uplink updates without
 -- granting gateways permission to alter shared records.
+-- The default prefix is 18; an empty policy prefix disables this filter.
+DEFINE TABLE packet_ingest_policy SCHEMAFULL PERMISSIONS NONE;
+DEFINE FIELD prefix ON packet_ingest_policy TYPE string
+    ASSERT $value = "" OR $value = /^[0-9A-F]{1,8}$/;
+CREATE ONLY packet_ingest_policy:dev_addr SET prefix = "18";
+
 ALTER TABLE gateway_reception SCHEMAFULL
     PERMISSIONS
         FOR select WHERE $auth.approved = true
         FOR create WHERE
             $auth.enabled = true
             AND gateway_id = <string>record::id($auth.id)
+            AND string::starts_with(
+                string::uppercase(lorawan.dev_addr ?? ""),
+                (packet_ingest_policy:dev_addr).prefix ?? "!"
+            )
         FOR update, delete NONE;
 
 ALTER TABLE lorawan_uplink SCHEMAFULL

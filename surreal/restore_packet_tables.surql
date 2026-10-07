@@ -1,6 +1,8 @@
 -- Restore only the packet-storage schema after gateway_reception and
 -- lorawan_uplink have been removed. This script intentionally leaves gateway
 -- credentials, access methods, gateway status, users, and UI data untouched.
+-- Preserve the stored DevAddr policy, including a disabled (empty) prefix.
+-- If no policy exists yet, initialize prefix 18 and retire legacy discard logic.
 --
 -- OVERWRITE makes this safe when a privileged collector has automatically
 -- recreated either table as schemaless before this script is run.
@@ -297,12 +299,25 @@ DEFINE INDEX OVERWRITE uplink_frequency_time ON lorawan_uplink FIELDS frequency_
 DEFINE INDEX OVERWRITE uplink_best_rssi_time ON lorawan_uplink FIELDS best_rssi_dbm, observed_at;
 DEFINE INDEX OVERWRITE uplink_best_snr_time ON lorawan_uplink FIELDS best_snr_db, observed_at;
 DEFINE INDEX OVERWRITE uplink_best_gateway_time ON lorawan_uplink FIELDS best_gateway_id, observed_at;
+
+DEFINE TABLE IF NOT EXISTS packet_ingest_policy SCHEMAFULL PERMISSIONS NONE;
+DEFINE FIELD IF NOT EXISTS prefix ON packet_ingest_policy TYPE string
+    ASSERT $value = "" OR $value = /^[0-9A-F]{1,8}$/;
+IF !record::exists(packet_ingest_policy:dev_addr) {
+    CREATE ONLY packet_ingest_policy:dev_addr SET prefix = "18";
+};
+REMOVE EVENT IF EXISTS discard_unmatched_reception ON TABLE gateway_reception;
+
 ALTER TABLE gateway_reception SCHEMAFULL
     PERMISSIONS
         FOR select WHERE $auth.approved = true
         FOR create WHERE
             $auth.enabled = true
             AND gateway_id = <string>record::id($auth.id)
+            AND string::starts_with(
+                string::uppercase(lorawan.dev_addr ?? ""),
+                (packet_ingest_policy:dev_addr).prefix ?? "!"
+            )
         FOR update, delete NONE;
 
 ALTER TABLE lorawan_uplink SCHEMAFULL
@@ -316,4 +331,3 @@ COMMIT TRANSACTION;
 -- gateway_reception result should also contain reception_to_uplink in events.
 INFO FOR TABLE gateway_reception;
 INFO FOR TABLE lorawan_uplink;
-

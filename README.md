@@ -75,6 +75,51 @@ Google users may select logical uplinks and
 receptions, while gateway-specific creation is preserved and browser users
 cannot create, update, or delete packet records.
 
+## Incoming packet prefix filter
+
+Gateway record users are filtered by `gateway_reception`'s creation permission
+before correlation. The default DevAddr prefix is **`18`**, stored in the protected
+`packet_ingest_policy:dev_addr` record. Nonmatching messages are skipped while
+accepted messages in the same collector transaction commit normally. Join
+Requests and messages without DevAddr are skipped while a nonempty prefix is
+configured. Existing packets are unaffected. Collector changes and an additional
+server are not required.
+
+For an existing database, run [`surreal/implement_dev_addr_filter.surql`](surreal/implement_dev_addr_filter.surql)
+as a database owner. It sets prefix `18`, installs the permission predicate, and
+atomically retires the old discard event and correlation-prefix guard. Use this
+targeted migration instead of rerunning the fresh-database bootstrap.
+
+To change the prefix, update the policy as a database owner, for example:
+
+```surql
+USE NS lora DB manta;
+UPDATE ONLY packet_ingest_policy:dev_addr SET prefix = "26";
+```
+
+Use 1–8 uppercase hexadecimal characters. To disable filtering, run
+[`surreal/remove_dev_addr_filter.surql`](surreal/remove_dev_addr_filter.surql),
+which sets an empty prefix and keeps gateway ownership checks. To reenable the
+default `18` policy, run the implementation script again. A missing policy fails
+closed; packet-table recovery preserves a configured prefix or disabled state,
+and initializes prefix `18` only when no policy record exists.
+
+[`surreal/rollback_dev_addr_filter.surql`](surreal/rollback_dev_addr_filter.surql)
+restores the former paired-event filter with prefix `18`. It is a rollback to the
+previous implementation, not a way to disable filtering. Database system users
+and privileged event writes bypass record-user permissions; this filter applies
+to the collector's `gateway_writer` record credentials.
+
+Test the migration/recovery paths on an automatically started disposable local
+database with synthetic records:
+
+```sh
+SURREAL_BIN=/path/to/surreal python3 surreal/tests/dev_addr_filter.py
+```
+
+The tests require Python 3 and a SurrealDB binary, were verified on 3.2.4, and
+cannot be directed at a Cloud database.
+
 ## Registration and invitations
 
 - A first-time Google user without an invitation is registered as `approved: false` and sees an
