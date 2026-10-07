@@ -151,6 +151,15 @@ function TreeValue({ label, value, mono = false }: { label: string; value: strin
   return <div className="tree-value"><span>{label}</span><code className={mono ? '' : 'plain'}>{String(value)}</code></div>;
 }
 
+function TreeLink({ label, href, children }: { label: string; href: string; children: React.ReactNode }) {
+  return (
+    <div className="tree-value">
+      <span>{label}</span>
+      <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+    </div>
+  );
+}
+
 function FrmPayloadTree({ hex }: { hex: string | null }) {
   const decoded = hex === null ? null : decodeDevicePayload(hex);
   if (!decoded) return <TreeValue label="FRMPayload" value={hex ?? '—'} mono />;
@@ -159,11 +168,57 @@ function FrmPayloadTree({ hex }: { hex: string | null }) {
     <TreeGroup label="FRMPayload">
       <TreeValue label="Raw" value={hex ?? '—'} mono />
       <TreeValue label="Version" value={decoded.version} />
-      <TreeValue label="Battery" value={decoded.batteryLevel} />
-      <TreeValue label="Status" value={decoded.status} />
-      <TreeValue label="RSSI" value={decoded.rssi} />
+      {'rfVoltageMv' in decoded ? (
+        <TreeValue
+          label="RF voltage"
+          value={decoded.rfVoltageMv === null ? 'Not measured' : `${decoded.rfVoltageMv} mV`}
+        />
+      ) : null}
+      {'txPowerDbm' in decoded ? <TreeValue label="TX power" value={`${decoded.txPowerDbm} dBm`} /> : null}
+      {'status' in decoded ? <TreeValue label="Status" value={decoded.status} /> : null}
+      <TreeValue label="RSSI" value={`${decoded.rssiDbm} dBm`} />
+      {'location' in decoded ? (
+        <>
+          <TreeValue
+            label="Latitude"
+            value={decoded.location === null ? 'No location' : decoded.location.latitudeDegrees.toFixed(7)}
+          />
+          <TreeValue
+            label="Longitude"
+            value={decoded.location === null ? 'No location' : decoded.location.longitudeDegrees.toFixed(7)}
+          />
+          {decoded.location !== null ? (
+            <TreeLink
+              label="Map"
+              href={openStreetMapUrl(
+                decoded.location.latitudeDegrees,
+                decoded.location.longitudeDegrees,
+              )}
+            >
+              Open in OpenStreetMap
+            </TreeLink>
+          ) : null}
+        </>
+      ) : null}
+      {'locationAgeSeconds' in decoded ? (
+        <TreeValue
+          label="Location age"
+          value={formatLocationAge(decoded.locationAgeSeconds)}
+        />
+      ) : null}
     </TreeGroup>
   );
+}
+
+function formatLocationAge(value: number | null): string {
+  if (value === null) return 'No location';
+  return value === 65_534 ? '≥65534 s' : `${value} s`;
+}
+
+function openStreetMapUrl(latitude: number, longitude: number): string {
+  const lat = latitude.toFixed(7);
+  const lon = longitude.toFixed(7);
+  return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`;
 }
 
 function groupHex(value: string): string {

@@ -168,6 +168,24 @@
   font-family: ui-sans-serif, system-ui, sans-serif;
 }
 
+.tree-value a {
+  width: fit-content;
+  color: #1d4ed8;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tree-value a:hover {
+  color: #1e40af;
+}
+
+.tree-value a:focus-visible {
+  border-radius: 2px;
+  outline: 1px solid currentColor;
+  outline-offset: 2px;
+}
+
 .packet-raw-pane > div > code {
   display: block;
   flex: 0 0 auto;
@@ -285,6 +303,14 @@
 .dark .tree-group > strong,
 .dark .tree-value code {
   color: #f3f4f6;
+}
+
+.dark .tree-value a {
+  color: #93c5fd;
+}
+
+.dark .tree-value a:hover {
+  color: #bfdbfe;
 }
 
 .dark .tree-group > div {
